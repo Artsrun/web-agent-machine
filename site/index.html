@@ -4,4 +4,842 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Web Agent Machine — Console</title>
-<!-- truncated for tool call size; full content follows from local -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+/* ─────────────────────────────────────────────────────────────
+   MASK LAYERS — colors encode subsystem layer, not decoration.
+   Ground is IC-layout-viewer ink; every accent is a mask layer.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --wafer:      #0E1120;
+  --substrate:  #161A2E;
+  --substrate2: #1C2138;
+  --etch:       #2A3050;
+  --silk:       #E6E8F4;
+  --dim:        #7C86A8;
+  --dimmer:     #4E5677;
+
+  --l-intent:  #F5A524;
+  --l-kernel:  #4FD6C4;
+  --l-policy:  #FF5C5C;
+  --l-conc:    #7B9CFF;
+  --l-wasm:    #B080FF;
+  --l-store:   #5FD68A;
+  --l-gfx:     #FF4FA3;
+
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body:    "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, monospace;
+
+  --rail: 1px;
+  --gap: 14px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%),
+    var(--wafer);
+  color: var(--silk);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--l-intent);
+  outline-offset: 2px;
+}
+
+/* ── shell ─────────────────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100dvh;
+  gap: var(--gap);
+  padding: var(--gap);
+  max-width: 1680px;
+  margin-inline: auto;
+}
+
+.panel {
+  background: var(--substrate);
+  border: var(--rail) solid var(--etch);
+  min-height: 0;
+}
+
+/* ── status rail ───────────────────────────────────────────── */
+.rail {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.mark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.mark span { color: var(--l-kernel); }
+
+.rev {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.legend {
+  display: flex;
+  gap: 4px;
+  margin-inline-start: auto;
+  flex-wrap: wrap;
+}
+
+.legend button {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: transparent;
+  border: var(--rail) solid var(--etch);
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend button::before {
+  content: "";
+  width: 7px; height: 7px;
+  background: var(--c);
+  box-shadow: 0 0 6px var(--c);
+}
+.legend button[aria-pressed="false"] { color: var(--dimmer); }
+.legend button[aria-pressed="false"]::before { background: var(--dimmer); box-shadow: none; }
+.legend button:hover { color: var(--silk); border-color: var(--dim); }
+
+/* ── main split ────────────────────────────────────────────── */
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  gap: var(--gap);
+  min-height: 0;
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* the render surface + the hit surface stack in one cell */
+.surface {
+  padding: 18px;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+
+/* one box, exact machine aspect — svg paints it, <img usemap> hit-tests it */
+.plate {
+  position: relative;
+  aspect-ratio: 1000 / 690;
+  width: min(100%, calc(100cqh * 1000 / 690));
+}
+
+.plate svg { width: 100%; height: 100%; display: block; }
+
+#hit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+}
+
+/* redundant text index — required fallback for the image map */
+.index {
+  border-top: var(--rail) solid var(--etch);
+  padding: 10px 14px 12px;
+}
+.index ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.index a {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-decoration: none;
+  color: var(--dim);
+  border: var(--rail) solid var(--etch);
+  border-left: 2px solid var(--c);
+  padding: 3px 9px;
+  display: block;
+}
+.index a:hover, .index a[aria-current="true"] {
+  color: var(--silk);
+  background: var(--substrate2);
+}
+
+/* ── inspector ─────────────────────────────────────────────── */
+.inspector {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 3px solid var(--c, var(--etch));
+}
+
+.inspector > * { padding-inline: 16px; }
+
+.ins-head { padding-block: 14px 12px; border-bottom: var(--rail) solid var(--etch); }
+.ins-head h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  margin: 6px 0 4px;
+}
+.ins-head p { margin: 0; color: var(--dim); font-size: 13px; max-width: 44ch; }
+
+.path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c);
+  margin-top: 10px;
+  word-spacing: .1em;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--etch);
+  border-bottom: var(--rail) solid var(--etch);
+  padding: 0;
+}
+.metric {
+  background: var(--substrate);
+  padding: 12px 16px;
+}
+.metric dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+}
+.metric dd {
+  margin: 4px 0 0;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.metric dd small { font-size: 11px; color: var(--dim); margin-left: 3px; }
+.bar { height: 2px; background: var(--etch); margin-top: 8px; }
+.bar i { display: block; height: 100%; background: var(--c); transition: width .4s ease; }
+
+.block { padding-block: 14px; border-bottom: var(--rail) solid var(--etch); }
+.block h2 {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+  margin: 0 0 10px;
+  font-weight: 500;
+}
+
+.caps { display: flex; flex-wrap: wrap; gap: 5px; }
+.caps span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border: var(--rail) solid var(--etch);
+  color: var(--dim);
+}
+.caps span[data-risk="high"] { color: var(--l-policy); border-color: color-mix(in srgb, var(--l-policy) 40%, var(--etch)); }
+.caps span[data-risk="med"]  { color: var(--l-intent); border-color: color-mix(in srgb, var(--l-intent) 35%, var(--etch)); }
+
+.notes { margin: 0; padding-left: 16px; color: var(--dim); font-size: 13px; }
+.notes li { margin-bottom: 5px; }
+.notes li::marker { color: var(--c); }
+
+/* ── event bus ─────────────────────────────────────────────── */
+.bus { padding: 0; overflow: hidden; }
+.bus header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  border-bottom: var(--rail) solid var(--etch);
+}
+.bus ol {
+  list-style: none;
+  margin: 0;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  height: 116px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+}
+.bus li { display: flex; gap: 14px; padding: 1px 0; color: var(--dim); white-space: nowrap; }
+.bus li b { color: var(--c); font-weight: 500; width: 74px; flex: none; }
+.bus li time { color: var(--dimmer); flex: none; }
+.bus li em { font-style: normal; color: var(--silk); }
+
+.pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--l-store);
+  box-shadow: 0 0 8px var(--l-store);
+  animation: pulse 2s ease-in-out infinite;
+  flex: none;
+}
+@keyframes pulse { 50% { opacity: .25; } }
+
+/* ── svg block styling ─────────────────────────────────────── */
+.blk rect { fill: var(--substrate2); stroke: var(--c); stroke-width: 1; opacity: .85; transition: opacity .25s, fill .25s; }
+.blk .title { fill: var(--silk); font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 700; font-size: 15px; letter-spacing: .1em; text-transform: uppercase; }
+.blk .sub { fill: var(--dim); font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: .04em; }
+.blk .tag { fill: var(--c); font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: .14em; }
+.blk .led { fill: var(--c); }
+
+.blk[data-on="false"] { opacity: .16; }
+.blk[data-hot="true"] rect { fill: color-mix(in srgb, var(--c) 14%, var(--substrate2)); opacity: 1; }
+.blk[data-sel="true"] rect { fill: color-mix(in srgb, var(--c) 20%, var(--substrate2)); opacity: 1; stroke-width: 2; }
+.blk[data-sel="true"] .led { animation: pulse 1.6s ease-in-out infinite; }
+
+.trace { stroke: var(--etch); stroke-width: 1; fill: none; }
+.trace[data-live="true"] { stroke: var(--c); stroke-dasharray: 4 4; animation: flow .6s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -8; } }
+
+/* ── responsive: image maps do not survive small screens ───── */
+@media (max-width: 980px) {
+  .main { grid-template-columns: 1fr; }
+  .surface, #hit { display: none; }
+  .stage { grid-template-rows: auto; }
+  .index a { font-size: 12px; padding: 7px 11px; }
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .shell { height: auto; min-height: 100dvh; }
+  .inspector { overflow: visible; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+
+<body>
+<div class="shell">
+
+  <!-- ══ STATUS RAIL ══════════════════════════════════════════ -->
+  <div class="panel rail">
+    <div class="mark">Web Agent <span>Machine</span></div>
+    <div class="rev">rev 0.1 · <span id="clock">--:--:--</span> · <span id="mode">SIM</span> — no live kernel attached</div>
+    <div class="legend" id="legend" role="group" aria-label="Mask layers"></div>
+  </div>
+
+  <!-- ══ MAIN ═════════════════════════════════════════════════ -->
+  <div class="main">
+
+    <section class="panel stage" aria-label="Machine map">
+      <div class="surface">
+       <div class="plate">
+        <svg id="scene" viewBox="0 0 1000 690" role="presentation" aria-hidden="true"></svg>
+
+        <!--
+          The <map> below is the SOURCE OF TRUTH for the scene.
+          Every <area> carries normalised geometry (0..1) plus semantics.
+          The SVG above is generated from it, and <area coords> are
+          recomputed from the same numbers on resize.
+          HTML stays the semantic layer; the renderer is downstream.
+        -->
+        <img id="hit" usemap="#machine" alt="Layered map of the Web Agent Machine: intent, agent kernel, model router, agent mesh, capability broker, workers, WASM runtime, service worker, storage and graphics." src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+
+        <map name="machine" id="machine">
+          <area shape="rect" coords="0,0,0,0" href="#intent" alt="Intent bus"
+                data-id="intent" data-x=".040" data-y=".041" data-w=".920" data-h=".072"
+                data-layer="intent" data-title="Intent Bus" data-sub="human · agent · schedule"
+                data-role="Everything the machine does starts as a typed intent, not a prompt string."
+                data-path="human → intent → kernel" />
+
+          <area shape="rect" coords="0,0,0,0" href="#kernel" alt="Agent kernel"
+                data-id="kernel" data-x=".040" data-y=".151" data-w=".560" data-h=".151"
+                data-layer="kernel" data-title="Agent Kernel" data-sub="planner · scheduler · state · memory · events"
+                data-role="Owns planning, scheduling, memory and policy. The LLM is a component inside it, never the kernel itself."
+                data-path="intent → plan → tool graph → validate" />
+
+          <area shape="rect" coords="0,0,0,0" href="#router" alt="Model router"
+                data-id="router" data-x=".620" data-y=".151" data-w=".340" data-h=".151"
+                data-layer="kernel" data-title="Model Router" data-sub="6B fast · 8B smart · VLM · cloud"
+                data-role="Routes each step to the cheapest model that can carry it. Model choice is a runtime decision."
+                data-path="step → classify → 6B | 8B | VLM | cloud" />
+
+          <area shape="rect" coords="0,0,0,0" href="#mesh" alt="Agent mesh"
+                data-id="mesh" data-x=".040" data-y=".339" data-w=".920" data-h=".110"
+                data-layer="intent" data-title="Agent Mesh" data-sub="file · browser · code · render · network · media"
+                data-role="Specialised agents on one event bus. Each exposes typed capabilities, never ambient access."
+                data-path="kernel → event bus → agent → capability request" />
+
+          <area shape="rect" coords="0,0,0,0" href="#broker" alt="Capability broker"
+                data-id="broker" data-x=".040" data-y=".487" data-w=".920" data-h=".096"
+                data-layer="policy" data-title="Capability Broker" data-sub="grant · deny · escalate to human"
+                data-role="The gate. Low risk passes, medium is policy-controlled, high risk stops for a human."
+                data-path="request → policy → grant | HITL | deny" />
+
+          <area shape="rect" coords="0,0,0,0" href="#workers" alt="Worker pool"
+                data-id="workers" data-x=".040" data-y=".620" data-w=".220" data-h=".159"
+                data-layer="conc" data-title="Worker Pool" data-sub="agent · render · compute · fs"
+                data-role="Concurrency layer. Anything expensive lives here so the main thread only composites and listens."
+                data-path="broker → worker → SharedArrayBuffer → WASM" />
+
+          <area shape="rect" coords="0,0,0,0" href="#wasm" alt="WASM runtime"
+                data-id="wasm" data-x=".282" data-y=".620" data-w=".220" data-h=".159"
+                data-layer="wasm" data-title="WASM Runtime" data-sub="component model · WIT interfaces"
+                data-role="The plugin ABI. Tools ship as typed components; the agent never learns what language they were written in."
+                data-path="invoke() → WIT → component → capability" />
+
+          <area shape="rect" coords="0,0,0,0" href="#sw" alt="Service worker"
+                data-id="sw" data-x=".524" data-y=".620" data-w=".220" data-h=".159"
+                data-layer="conc" data-title="Service Worker" data-sub="network · cache · lifecycle"
+                data-role="Infrastructure, not an agent. Keeps the machine running when the network does not."
+                data-path="fetch → intercept → cache | network | offline" />
+
+          <area shape="rect" coords="0,0,0,0" href="#storage" alt="Persistence"
+                data-id="storage" data-x=".766" data-y=".620" data-w=".194" data-h=".159"
+                data-layer="store" data-title="Persistence" data-sub="IndexedDB · OPFS"
+                data-role="Structured state in IndexedDB, bulk in OPFS. Kept separate so neither becomes a junk drawer."
+                data-path="state → IndexedDB · blobs → OPFS" />
+
+          <area shape="rect" coords="0,0,0,0" href="#gpu" alt="Graphics stack"
+                data-id="gpu" data-x=".040" data-y=".817" data-w=".920" data-h=".130"
+                data-layer="gfx" data-title="Graphics Stack" data-sub="scene graph · OffscreenCanvas · WebGPU"
+                data-role="Scene graph rendered off the main thread. HTML keeps the semantics, the GPU keeps the pixels."
+                data-path="scene → OffscreenCanvas → WebGPU → display" />
+        </map>
+       </div>
+      </div>
+
+      <nav class="index" aria-label="Subsystem index">
+        <div class="eyebrow">Hotspot index — every region of the map, as text</div>
+        <ul id="index"></ul>
+      </nav>
+    </section>
+
+    <!-- ══ INSPECTOR ══════════════════════════════════════════ -->
+    <aside class="panel inspector" id="inspector" aria-live="polite">
+      <div class="ins-head">
+        <div class="eyebrow" id="ins-layer">—</div>
+        <h1 id="ins-title">—</h1>
+        <p id="ins-role"></p>
+        <div class="path" id="ins-path"></div>
+      </div>
+
+      <dl class="metrics" id="ins-metrics"></dl>
+
+      <div class="block">
+        <h2>Capabilities</h2>
+        <div class="caps" id="ins-caps"></div>
+      </div>
+
+      <div class="block">
+        <h2>Operating notes</h2>
+        <ul class="notes" id="ins-notes"></ul>
+      </div>
+
+      <div class="block" style="border-bottom:0">
+        <h2>Wired to</h2>
+        <div class="caps" id="ins-wired"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ══ EVENT BUS ════════════════════════════════════════════ -->
+  <section class="panel bus" aria-label="Event bus">
+    <header>
+      <span class="pulse"></span>
+      <span class="eyebrow">Event bus — tail</span>
+    </header>
+    <ol id="bus" aria-live="off"></ol>
+  </section>
+
+</div>
+
+<script type="module">
+/* ─────────────────────────────────────────────────────────────
+   1. LAYERS
+   ───────────────────────────────────────────────────────────── */
+const LAYERS = {
+  intent: { label: 'Intent',      color: 'var(--l-intent)' },
+  kernel: { label: 'Kernel',      color: 'var(--l-kernel)' },
+  policy: { label: 'Policy',      color: 'var(--l-policy)' },
+  conc:   { label: 'Concurrency', color: 'var(--l-conc)'   },
+  wasm:   { label: 'WASM',        color: 'var(--l-wasm)'   },
+  store:  { label: 'Storage',     color: 'var(--l-store)'  },
+  gfx:    { label: 'Graphics',    color: 'var(--l-gfx)'    },
+};
+
+const VIEW = { w: 1000, h: 690 };
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ─────────────────────────────────────────────────────────────
+   2. READ THE <map> — it is the scene graph
+   ───────────────────────────────────────────────────────────── */
+const areas = [...document.querySelectorAll('#machine area')];
+
+const nodes = areas.map((a) => ({
+  el: a,
+  id: a.dataset.id,
+  layer: a.dataset.layer,
+  title: a.dataset.title,
+  sub: a.dataset.sub.split(' · '),
+  role: a.dataset.role,
+  path: a.dataset.path,
+  x: +a.dataset.x * VIEW.w,
+  y: +a.dataset.y * VIEW.h,
+  w: +a.dataset.w * VIEW.w,
+  h: +a.dataset.h * VIEW.h,
+}));
+
+const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+const TRACES = [
+  ['intent','kernel'], ['kernel','router'], ['kernel','mesh'], ['router','mesh'],
+  ['mesh','broker'], ['broker','workers'], ['broker','wasm'],
+  ['broker','sw'], ['broker','storage'],
+  ['workers','gpu'], ['wasm','gpu'], ['sw','gpu'], ['storage','gpu'],
+];
+
+/* ─────────────────────────────────────────────────────────────
+   3. STATIC DATA PER SUBSYSTEM
+   ───────────────────────────────────────────────────────────── */
+const DETAIL = {
+  intent:  { caps: [['intent.submit'],['intent.cancel'],['intent.observe']],
+             notes: ['Intents are typed records, so they can be replayed, diffed and audited.',
+                     'A rejected intent leaves a reason on the bus — never a silent drop.'],
+             metrics: [['Queued','q','',12],['Accepted /min','rate','',48],['Median age','age','ms',180],['Rejected','rej','',2]] },
+  kernel:  { caps: [['plan.build'],['plan.step'],['memory.read'],['memory.write','med'],['policy.eval']],
+             notes: ['The planner emits a tool graph before anything executes; the graph is the contract.',
+                     'Swap the reasoning model at runtime and the kernel keeps its state.'],
+             metrics: [['Active plans','plans','',3],['Steps /min','steps','',126],['Memory','mem','MB',214],['Replans','replan','',1]] },
+  router:  { caps: [['model.classify'],['model.invoke'],['model.stream']],
+             notes: ['Routing is a classification problem, so the 6B handles it and stays out of the way.',
+                     'Escalation to cloud is logged as a policy event, not a silent fallback.'],
+             metrics: [['6B share','local','%',71],['p50 latency','p50','ms',340],['Tokens /s','tps','',87],['Escalations','esc','',4]] },
+  mesh:    { caps: [['agent.spawn'],['agent.call'],['bus.publish'],['bus.subscribe']],
+             notes: ['Agents talk over the bus, never by reaching into each other.',
+                     'Each agent declares its capability set at registration and cannot widen it later.'],
+             metrics: [['Agents up','agents','',6],['Msgs /s','msgs','',94],['Backpressure','back','%',8],['Faults','faults','',0]] },
+  broker:  { caps: [['filesystem.read'],['filesystem.write','med'],['network.fetch','med'],['browser.navigate','med'],['process.execute','high'],['microphone.record','high']],
+             notes: ['An autonomous agent without permissions is a security incident with a personality.',
+                     'High-risk grants expire; nothing stays granted because it was granted once.'],
+             metrics: [['Granted /min','grant','',63],['Awaiting human','hitl','',2],['Denied','deny','',5],['Live grants','live','',17]] },
+  workers: { caps: [['worker.spawn'],['worker.transfer'],['sab.alloc','med'],['atomics.wait']],
+             notes: ['Main thread does input, accessibility and composition. Nothing else.',
+                     'Transferables over structuredClone wherever the payload is binary.'],
+             metrics: [['Workers','n','',8],['Queue depth','depth','',3],['CPU','cpu','%',46],['Main-thread block','block','ms',4]] },
+  wasm:    { caps: [['component.load'],['component.invoke'],['wit.describe'],['memory.grow','med']],
+             notes: ['A component that fails to satisfy its WIT interface never gets instantiated.',
+                     'Binaries are cached in OPFS and verified before reuse.'],
+             metrics: [['Components','comp','',12],['Instances','inst','',19],['Linear memory','lin','MB',96],['Cold start','cold','ms',22]] },
+  sw:      { caps: [['fetch.intercept'],['cache.write','med'],['lifecycle.update','med']],
+             notes: ['Treat it as infrastructure. Putting the agent in the service worker is how you lose a weekend.',
+                     'Offline is a supported mode, not a degraded one.'],
+             metrics: [['Cache hit','hit','%',82],['Intercepted /s','icept','',37],['Cache size','size','MB',148],['Offline ready','ready','',1]] },
+  storage: { caps: [['idb.read'],['idb.write','med'],['opfs.read'],['opfs.write','med'],['quota.request','med']],
+             notes: ['Structured state and bulk artifacts stay in separate stores on purpose.',
+                     'Ephemeral, persistent and semantic memory are three things, not one vector table.'],
+             metrics: [['OPFS used','opfs','GB',2.4],['IndexedDB','idb','MB',312],['Quota','quota','%',38],['Writes /s','w','',11]] },
+  gpu:     { caps: [['gpu.adapter'],['gpu.render'],['canvas.transfer'],['scene.commit']],
+             notes: ['The scene graph is committed from a worker; the main thread only presents.',
+                     'If WebGPU is unavailable the compositor falls back to 2D canvas, not to nothing.'],
+             metrics: [['Frame time','ft','ms',6.8],['FPS','fps','',60],['Draw calls','draws','',214],['VRAM','vram','MB',412]] },
+};
+
+/* each metric keeps its own headroom and numeric type, so the bars
+   mean something and integers never drift into decimals */
+Object.values(DETAIL).forEach((d) => d.metrics.forEach((m) => {
+  m.base = m[3] || 1;
+  m.int = Number.isInteger(m[3]);
+}));
+
+const pct = (v, m) => Math.max(3, Math.min(100, (v / (m.base * 1.6)) * 100));
+
+const jitter = (v, int) => {
+  const d = v * (Math.random() * 0.16 - 0.08);
+  return int ? Math.max(0, Math.round(v + d)) : +Math.max(0, v + d).toFixed(1);
+};
+
+/* ─────────────────────────────────────────────────────────────
+   4. BUILD THE SVG FROM THE MAP
+   ───────────────────────────────────────────────────────────── */
+const scene = document.getElementById('scene');
+const el = (tag, attrs = {}) => {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+};
+
+const traceLayer = el('g');
+scene.append(traceLayer);
+
+TRACES.forEach(([from, to]) => {
+  const a = byId[from], b = byId[to];
+  const x1 = a.x + a.w / 2, y1 = a.y + a.h;
+  const x2 = b.x + b.w / 2, y2 = b.y;
+  const mid = y1 + (y2 - y1) / 2;
+  const p = el('path', {
+    class: 'trace',
+    d: `M${x1} ${y1} V${mid} H${x2} V${y2}`,
+    'data-from': from, 'data-to': to,
+  });
+  traceLayer.append(p);
+});
+
+nodes.forEach((n) => {
+  const g = el('g', { class: 'blk', id: `blk-${n.id}`, 'data-on': 'true', 'data-hot': 'false', 'data-sel': 'false' });
+  g.style.setProperty('--c', LAYERS[n.layer].color);
+
+  g.append(el('rect', { x: n.x, y: n.y, width: n.w, height: n.h }));
+  g.append(el('rect', { class: 'led', x: n.x, y: n.y, width: 3, height: n.h }));
+
+  const text = (cls, x, y, str, anchor) => {
+    const t = el('text', { class: cls, x, y });
+    if (anchor) t.setAttribute('text-anchor', anchor);
+    t.textContent = str;
+    g.append(t);
+  };
+
+  const layout = n.h < 60 ? 'bar' : n.w >= 300 ? 'wide' : 'stack';
+  const label = LAYERS[n.layer].label.toUpperCase();
+
+  if (layout === 'bar') {
+    const mid = n.y + n.h / 2 + 4;
+    text('tag', n.x + 14, mid, label);
+    text('title', n.x + 92, mid, n.title);
+    text('sub', n.x + n.w - 14, mid, n.sub.join('  ·  '), 'end');
+  } else if (layout === 'wide') {
+    text('tag', n.x + 14, n.y + 20, label);
+    text('title', n.x + 14, n.y + 42, n.title);
+    text('sub', n.x + 14, n.y + 60, n.sub.join('  ·  '));
+  } else {
+    text('tag', n.x + 14, n.y + 20, label);
+    text('title', n.x + 14, n.y + 43, n.title);
+    n.sub.forEach((s, i) => text('sub', n.x + 14, n.y + 62 + i * 15, s));
+  }
+
+  scene.append(g);
+});
+
+/* ─────────────────────────────────────────────────────────────
+   5. RESCALE <area coords> — the one thing image maps get wrong
+   ───────────────────────────────────────────────────────────── */
+const hit = document.getElementById('hit');
+
+const rescale = () => {
+  const w = hit.clientWidth, h = hit.clientHeight;
+  if (!w || !h) return;
+  const sx = w / VIEW.w, sy = h / VIEW.h;
+  nodes.forEach((n) => {
+    n.el.coords = [n.x * sx, n.y * sy, (n.x + n.w) * sx, (n.y + n.h) * sy]
+      .map(Math.round).join(',');
+  });
+};
+
+new ResizeObserver(rescale).observe(hit);
+addEventListener('load', rescale);
+rescale();
+
+/* ─────────────────────────────────────────────────────────────
+   6. SELECTION + HOVER
+   ───────────────────────────────────────────────────────────── */
+const q = (id) => document.getElementById(id);
+let selected = 'kernel';
+
+const setHot = (id, on) => {
+  const g = q(`blk-${id}`);
+  if (g) g.dataset.hot = String(on);
+  traceLayer.querySelectorAll('.trace').forEach((p) => {
+    if (p.dataset.from === id || p.dataset.to === id) p.dataset.live = String(on);
+  });
+};
+
+const render = (id) => {
+  selected = id;
+  const n = byId[id];
+  const d = DETAIL[id];
+  const color = LAYERS[n.layer].color;
+
+  nodes.forEach((m) => q(`blk-${m.id}`).dataset.sel = String(m.id === id));
+
+  const ins = q('inspector');
+  ins.style.setProperty('--c', color);
+  q('ins-layer').textContent = `${LAYERS[n.layer].label} layer / ${n.id}`;
+  q('ins-title').textContent = n.title;
+  q('ins-role').textContent = n.role;
+  q('ins-path').textContent = n.path;
+
+  q('ins-metrics').innerHTML = d.metrics.map((m) => { const [label, key, unit, val] = m; return `
+    <div class="metric">
+      <dt>${label}</dt>
+      <dd><span data-metric="${key}">${val}</span>${unit ? `<small>${unit}</small>` : ''}</dd>
+      <div class="bar"><i data-bar="${key}" style="width:${pct(val, m)}%"></i></div>
+    </div>`; }).join('');
+
+  q('ins-caps').innerHTML = d.caps
+    .map(([c, risk]) => `<span${risk ? ` data-risk="${risk}"` : ''}>${c}</span>`).join('');
+
+  q('ins-notes').innerHTML = d.notes.map((t) => `<li>${t}</li>`).join('');
+
+  const wired = TRACES.flatMap(([a, b]) =>
+    a === id ? [['↓', b]] : b === id ? [['↑', a]] : []);
+  q('ins-wired').innerHTML = wired.length
+    ? wired.map(([dir, m]) =>
+        `<span data-goto="${m}" role="button" tabindex="0" style="cursor:pointer">${dir} ${byId[m].title}</span>`).join('')
+    : '<span>terminal node</span>';
+
+  document.querySelectorAll('#index a').forEach((a) =>
+    a.setAttribute('aria-current', String(a.dataset.id === id)));
+};
+
+areas.forEach((a) => {
+  a.addEventListener('mouseenter', () => setHot(a.dataset.id, true));
+  a.addEventListener('mouseleave', () => setHot(a.dataset.id, false));
+  a.addEventListener('focus', () => setHot(a.dataset.id, true));
+  a.addEventListener('blur', () => setHot(a.dataset.id, false));
+  a.addEventListener('click', (e) => { e.preventDefault(); render(a.dataset.id); });
+});
+
+/* ─────────────────────────────────────────────────────────────
+   7. REDUNDANT TEXT INDEX (WAI: image maps need a text path)
+   ───────────────────────────────────────────────────────────── */
+q('index').innerHTML = nodes.map((n) => `
+  <li><a href="#${n.id}" data-id="${n.id}" style="--c:${LAYERS[n.layer].color}">${n.title}</a></li>`).join('');
+
+q('index').addEventListener('click', (e) => {
+  const a = e.target.closest('a');
+  if (!a) return;
+  e.preventDefault();
+  render(a.dataset.id);
+});
+q('index').addEventListener('mouseover', (e) => {
+  const a = e.target.closest('a'); if (a) setHot(a.dataset.id, true);
+});
+q('index').addEventListener('mouseout', (e) => {
+  const a = e.target.closest('a'); if (a) setHot(a.dataset.id, false);
+});
+
+/* ─────────────────────────────────────────────────────────────
+   8. LAYER TOGGLES — dim non-active mask layers
+   ───────────────────────────────────────────────────────────── */
+const off = new Set();
+q('legend').innerHTML = Object.entries(LAYERS).map(([k, v]) => `
+  <button type="button" data-layer="${k}" aria-pressed="true" style="--c:${v.color}">${v.label}</button>`).join('');
+
+q('legend').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const k = b.dataset.layer;
+  off.has(k) ? off.delete(k) : off.add(k);
+  b.setAttribute('aria-pressed', String(!off.has(k)));
+  nodes.forEach((n) => q(`blk-${n.id}`).dataset.on = String(!off.has(n.layer)));
+});
+
+/* ─────────────────────────────────────────────────────────────
+   9. TELEMETRY SIM — replace with a real kernel feed
+   ───────────────────────────────────────────────────────────── */
+setInterval(() => {
+  DETAIL[selected].metrics.forEach((m) => {
+    m[3] = Math.max(0, jitter(m[3], m.int));
+    const node = document.querySelector(`[data-metric="${m[1]}"]`);
+    const bar = document.querySelector(`[data-bar="${m[1]}"]`);
+    if (node) node.textContent = m[3];
+    if (bar) bar.style.width = `${pct(m[3], m)}%`;
+  });
+}, 1400);
+
+const EVENTS = [
+  ['kernel',  'plan.step',        'tool=fs.read ok'],
+  ['router',  'model.route',      '6B → local ok'],
+  ['broker',  'grant',            'network.fetch scope=api'],
+  ['broker',  'escalate',         'process.execute → awaiting human'],
+  ['wasm',    'component.invoke', 'image/resize@0.3.1'],
+  ['workers', 'transfer',         'OffscreenCanvas → render.worker'],
+  ['storage', 'opfs.write',       'artifact 4.1MB'],
+  ['sw',      'cache.hit',        '/model/shard-07'],
+  ['gpu',     'scene.commit',     '214 draws'],
+  ['mesh',    'agent.call',       'BrowserAgent.navigate'],
+];
+
+const bus = q('bus');
+const stamp = (back = 0) => {
+  const t = new Date(Date.now() - back);
+  return t.toTimeString().slice(0, 8) + '.' + String(t.getMilliseconds()).padStart(3, '0');
+};
+
+const emit = (back = 0) => {
+  const [src, ev, msg] = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+  const li = document.createElement('li');
+  li.style.setProperty('--c', LAYERS[byId[src].layer].color);
+  li.innerHTML = `<time>${stamp(back)}</time><b>${src}</b><em>${ev}</em><span>${msg}</span>`;
+  bus.prepend(li);
+  while (bus.children.length > 40) bus.lastElementChild.remove();
+};
+
+setInterval(emit, 900);
+for (let i = 8; i > 0; i--) emit(i * 900 + Math.random() * 400);
+
+setInterval(() => { q('clock').textContent = new Date().toTimeString().slice(0, 8); }, 1000);
+
+q('ins-wired').addEventListener('click', (e) => {
+  const s = e.target.closest('[data-goto]');
+  if (s) render(s.dataset.goto);
+});
+q('ins-wired').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const s = e.target.closest('[data-goto]');
+  if (s) { e.preventDefault(); render(s.dataset.goto); }
+});
+
+/* boot */
+render('kernel');
+</script>
+</body>
+</html>
