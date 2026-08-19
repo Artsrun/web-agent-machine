@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Web Agent Machine</title>
+<style>
+  body { font-family: system-ui; background: #0E1120; color: #E6E8F4; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+  a { color: #4FD6C4; }
+  .box { max-width: 520px; padding: 2rem; border: 1px solid #2A3050; background: #161A2E; }
+  h1 { font-size: 1.4rem; letter-spacing: .08em; text-transform: uppercase; }
+  code { font-size: 0.85rem; color: #7C86A8; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>Web Agent Machine</h1>
+    <p>Live interactive console is in the working tree (<code>apps/desktop/console.html</code> / <code>site/index.html</code>).</p>
+    <p>Full file (~45 KB) with Kernel + HITL + fallbacks should be pushed from local:</p>
+    <pre><code>git add site/index.html
+git commit -m "pages: live console"
+git push origin prod</code></pre>
+    <p>Then enable Pages: Settings → Pages → Source = GitHub Actions.</p>
+    <p><a href="https://github.com/Artsrun/web-agent-machine">Repository</a></p>
+  </div>
+</body>
+</html>
