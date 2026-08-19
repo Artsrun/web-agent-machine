@@ -116,7 +116,7 @@ function plan(text) {
 class Kernel {
   constructor() {
     this.bus = new EventBus(); this.broker = new CapabilityBroker(); this.principal = 'desktop-agent';
-    this.router = (t) => (/architect|refactor|multi-step|plan/.test(t) ? '8b' : '6b');
+    this.router = (t) => (/architect|refactor|multi-step|plan/i.test(t) ? '8b' : '6b');
     this.fallbacks = [
       { from: 'browser.navigate', to: 'filesystem.write', mapArgs: () => ({ path: '/nav-fallback.txt', content: 'navigate was blocked — logged instead' }), reason: 'navigate denied/failed → log to file' },
       { from: 'browser.click', to: 'filesystem.write', mapArgs: (args) => ({ path: '/click-fallback.txt', content: `click blocked: ${JSON.stringify(args)}` }), reason: 'click denied/failed → log to file' },
@@ -129,7 +129,7 @@ class Kernel {
     const intent = { id: crypto.randomUUID(), text, timestamp: Date.now() };
     await this.bus.emit({ type: 'intent', payload: intent });
     const model = this.router(text); const steps = plan(text);
-    const planObj = { id: crypto.randomUUID(), intentId: intent.id, steps };
+    const planObj = { id: crypto.randomUUID(), intentId: intent.id, steps, model };
     await this.bus.emit({ type: 'plan', payload: planObj });
     for (const step of steps) { if (!step.capability) continue; const stopped = await this.executeWithFallback(step.capability, step.args || {}); if (stopped) break; }
     return { intent, plan: planObj, model };
@@ -141,7 +141,7 @@ class Kernel {
     const result = await this.broker.request({ requestId: callId, capability, args, principal: this.principal });
     await this.bus.emit({ type: 'tool_result', payload: { callId, ok: result.ok, result: result.ok ? result.result : undefined, error: result.ok ? undefined : result.error } });
     if (result.ok) return false;
-    if (result.requiresHITL) { await this.bus.emit({ type: 'error', payload: { code: 'HITL_REQUIRED', message: `Human approval needed for ${capability}`, recoverable: true, capability } }); return true; }
+    if (result.requiresHITL) { await this.bus.emit({ type: 'error', payload: { code: 'HITL_REQUIRED', message: `Human approval needed for ${capability}`, recoverable: true, capability, args } }); return true; }
     const rule = this.fallbacks.find((f) => f.from === capability);
     if (rule) { await this.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason || `${capability} → ${rule.to}`, recoverable: true, capability, fallbackTo: rule.to } }); return this.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(args) : args, depth + 1); }
     await this.bus.emit({ type: 'error', payload: { code: 'TOOL_FAILED', message: result.error || `${capability} failed`, recoverable: false, capability } }); return false;
@@ -158,17 +158,21 @@ const stamp = () => { const t = new Date(); return t.toTimeString().slice(0, 8) 
 const pushBus = (src, ev, msg, layer = 'kernel') => {
   const li = document.createElement('li');
   li.style.setProperty('--c', LAYERS[layer]?.color || 'var(--l-kernel)');
-  li.innerHTML = `<time>${stamp()}</time><b>${src}</b><em>${ev}</em><span>${msg}</span>`;
+  const time = document.createElement('time'); time.textContent = stamp();
+  const b = document.createElement('b'); b.textContent = src;
+  const em = document.createElement('em'); em.textContent = ev;
+  const span = document.createElement('span'); span.textContent = msg;
+  li.append(time, b, em, span);
   bus.prepend(li); while (bus.children.length > 40) bus.lastElementChild.remove();
 };
 kernel.bus.on('*', (e) => {
   switch (e.type) {
     case 'intent': pushBus('kernel', 'intent', e.payload.text.slice(0, 48), 'kernel'); break;
-    case 'plan': pushBus('kernel', 'plan', e.payload.steps.map(s => s.description).join(' → '), 'kernel'); break;
+    case 'plan': pushBus('kernel', 'plan', `[${e.payload.model}] ` + e.payload.steps.map(s => s.description).join(' → '), 'kernel'); break;
     case 'tool_call': pushBus('mesh', 'tool_call', e.payload.capability, 'intent'); break;
     case 'tool_result': pushBus('broker', e.payload.ok ? 'grant' : 'deny', e.payload.ok ? JSON.stringify(e.payload.result).slice(0, 40) : e.payload.error, 'policy'); break;
     case 'error':
-      if (e.payload.code === 'HITL_REQUIRED') { pushBus('broker', 'HITL', e.payload.message, 'policy'); showHITL(e.payload.capability); }
+      if (e.payload.code === 'HITL_REQUIRED') { pushBus('broker', 'HITL', e.payload.message, 'policy'); showHITL(e.payload.capability, e.payload.args); }
       else if (e.payload.code === 'HITL_DENIED') { pushBus('broker', 'denied', e.payload.message, 'policy'); }
       else if (e.payload.code === 'FALLBACK') { pushBus('broker', 'fallback', e.payload.message, 'policy'); }
       else { pushBus('broker', 'error', e.payload.message || e.payload.code, 'policy'); }
@@ -176,12 +180,18 @@ kernel.bus.on('*', (e) => {
   }
 });
 let pendingCap = null;
+let pendingArgs = null;
 const hitlBar = document.createElement('div');
 hitlBar.style.cssText = 'display:none;padding:8px 14px;border-top:1px solid var(--etch);background:var(--substrate2);align-items:center;gap:10px;';
 hitlBar.innerHTML = `<span class="eyebrow" style="color:var(--l-policy)">HITL required</span><span id="hitl-cap" style="font-family:var(--font-mono);font-size:12px;color:var(--silk)"></span><button id="hitl-approve" style="margin-left:auto;font-family:var(--font-mono);font-size:11px;padding:4px 12px;background:var(--l-policy);color:#fff;border:0;cursor:pointer">APPROVE</button><button id="hitl-deny" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px;background:transparent;color:var(--dim);border:1px solid var(--etch);cursor:pointer">DENY</button>`;
 document.querySelector('.bus').append(hitlBar);
-function showHITL(cap) { pendingCap = cap; document.getElementById('hitl-cap').textContent = cap || ''; hitlBar.style.display = 'flex'; }
-document.getElementById('hitl-approve').onclick = () => { if (!pendingCap) return; const cap = pendingCap; kernel.approve(cap); pushBus('broker', 'approve', cap, 'policy'); hitlBar.style.display = 'none'; pendingCap = null; };
+function showHITL(cap, args) { pendingCap = cap; pendingArgs = args || {}; document.getElementById('hitl-cap').textContent = cap || ''; hitlBar.style.display = 'flex'; }
+document.getElementById('hitl-approve').onclick = async () => {
+  if (!pendingCap) return;
+  const cap = pendingCap; const args = pendingArgs;
+  kernel.approve(cap); pushBus('broker', 'approve', cap, 'policy'); hitlBar.style.display = 'none'; pendingCap = null; pendingArgs = null;
+  await kernel.executeWithFallback(cap, args);
+};
 document.getElementById('hitl-deny').onclick = async () => {
   const cap = pendingCap; if (!cap) { hitlBar.style.display = 'none'; return; }
   await kernel.bus.emit({ type: 'error', payload: { code: 'HITL_DENIED', message: `Human denied capability: ${cap}`, recoverable: true, capability: cap } });
