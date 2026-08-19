@@ -19,7 +19,7 @@ Architecture **v0.2** · Implementation **Phase 2–4**
 - Minimal desktop shell (`apps/desktop`)
 - Worker offload scaffolding (`packages/workers`)
 
-See [docs/architecture.md](docs/architecture.md) and [docs/workers.md](docs/workers.md).
+See [docs/architecture.md](docs/architecture.md), [docs/workers.md](docs/workers.md) and [docs/roadmap.md](docs/roadmap.md).
 
 ## Core Ideas
 
