@@ -1,0 +1,6 @@
+{
+  "name": "@wam/agents",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "./src/file-agent.ts"
+}
