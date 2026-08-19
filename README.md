@@ -26,8 +26,7 @@ Architecture **v0.2** · Implementation **Phase 2–4**
 ## Quick Start
 
 ```bash
-cd packages/kernel && npx tsx src/run-tests.mjs
-cd apps/desktop && npx serve .   # open /console.html
+cd site && npx serve .   # open /index.html
 ```
 
 ## License
