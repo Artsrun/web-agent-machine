@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mask">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The Agent Loop Hidden in Plain Sight — Web Agent Machine</title>
+<meta name="description" content="What Grok’s investigation sequence actually reveals about agent architecture: discovery, skills vs tools, the observe-plan-act loop, and why the world model comes before the act." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --etch: #2A3050;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --l-kernel: #4FD6C4; --l-intent: #F5A524; --l-store: #5FD68A;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --rail: 1px; --gap: 14px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 720px; margin-inline: auto; padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); }
+.panel { background: var(--substrate); border: var(--rail) solid var(--etch); }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--l-kernel); }
+.rail a.back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.rail a.back:hover { color: var(--l-kernel); }
+article { padding: 28px 26px 34px; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 10px; }
+h1 { font-family: var(--font-display); font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -.01em; }
+.byline { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-bottom: 26px; }
+h2 { font-family: var(--font-display); font-size: 18px; margin: 28px 0 10px; color: var(--l-kernel); letter-spacing: .01em; }
+h3 { font-family: var(--font-display); font-size: 15px; margin: 20px 0 8px; color: var(--silk); }
+p { margin: 0 0 14px; color: #CFD4E8; }
+ul { margin: 0 0 14px; padding-left: 0; list-style: none; color: #CFD4E8; }
+li { margin-bottom: 9px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--wafer); border: 1px solid var(--etch); padding: 1px 6px; color: var(--l-kernel); }
+strong { color: var(--silk); font-weight: 600; }
+pre {
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.45;
+  background: var(--wafer); border: 1px solid var(--etch);
+  padding: 14px 16px; overflow-x: auto; color: #B8C0DC; margin: 0 0 16px;
+}
+footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--l-kernel); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="panel rail">
+    <a class="mark" href="../index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="../blog.html">&larr; notes</a>
+  </div>
+
+  <article class="panel">
+    <div class="eyebrow">Notes</div>
+    <h1>The Agent Loop Hidden in Plain Sight</h1>
+    <div class="byline">rev 0.1 · notes · ~5 min read</div>
+
+    <p>There is still no universal “AI Agent Standard.” Humanity has not managed to agree on one protocol for making software think. What we do have are increasingly stable patterns. A Grok investigation sequence makes them visible.</p>
+
+    <h2>What the sequence actually did</h2>
+    <pre>User task
+   │
+   ▼
+Discover skills / design-ui/...
+   │
+   ▼
+Read domain guidance
+  refined-ui.md · typography.md · surfaces.md
+   │
+   ▼
+Inspect target
+  auth/gates.tsx
+   │
+   ▼
+Expand context
+  /src/lib
+   │
+   ▼
+Read dependency
+  auth/client.ts</pre>
+
+    <p>It did not open the target file first. It asked, effectively: “What rules do I need before I touch this?” That is context acquisition, not code generation.</p>
+
+    <h2>Skills vs Tools</h2>
+    <p>A tool answers <strong>how can I perform an operation?</strong><br>
+A skill answers <strong>how should I perform this class of operation?</strong></p>
+
+    <p><code>read_file()</code> is a tool. <code>design-ui</code> is a skill — principles, constraints, patterns, anti-patterns, validation rules. The separation is powerful:</p>
+
+    <pre>        AGENT
+          │
+    ┌─────┴─────┐
+    │           │
+  TOOLS       SKILLS
+    │           │
+   HOW         HOW
+    │           │
+    └─────┬─────┘
+          ▼
+       ACTION</pre>
+
+    <h2>The fundamental loop</h2>
+    <pre>         GOAL
+           │
+           ▼
+        OBSERVE
+           │
+           ▼
+         PLAN
+           │
+           ▼
+          ACT
+           │
+           ▼
+     OBSERVE RESULT
+           │
+      success?
+     /        \
+   no          yes
+   │            │
+ REPLAN       VERIFY
+   │            │
+   └────┐       ▼
+        │     DONE
+        └───────►</pre>
+
+    <p>Modern agents rarely generate a 47-step plan and then march into a wall. They interleave plan → act → observe → re-plan. The second approach is how you get confident failure that lasts eleven minutes.</p>
+
+    <h2>Capability layers</h2>
+    <ul>
+      <li><strong>Layer 0 — Model</strong><br>Understands, reasons, generates. Alone it is a brain in a jar.</li>
+      <li><strong>Layer 1 — Context</strong><br><code>read / search / retrieve / remember / inspect</code></li>
+      <li><strong>Layer 2 — Tools</strong><br>Filesystem, terminal, browser, git, API, calculator…</li>
+      <li><strong>Layer 3 — Skills</strong><br>Normative knowledge for a class of work.</li>
+      <li><strong>Layer 4 — Memory</strong><br>Working, episodic, semantic, procedural — externalized as AGENTS.md, skills/, git history, previous attempts.</li>
+      <li><strong>Layer 5 — Planning</strong><br>Goal decomposition that stays adaptive.</li>
+      <li><strong>Layer 6 — Verification</strong><br>ACTION ≠ SUCCESS. Lint, typecheck, test, inspect diff, run the thing.</li>
+      <li><strong>Layer 7 — Recovery</strong><br>Retry, rollback, alternative strategy, reduce scope, escalate.</li>
+      <li><strong>Layer 8 — Governance</strong><br>Can I read / write / execute / call external / delete?</li>
+    </ul>
+
+    <h2>A minimal capability contract</h2>
+    <pre>AGENT
+├── INPUT        goal · constraints · context
+├── DISCOVERY    skills · tools · resources · capabilities
+├── CONTEXT      retrieve · search · read · memory
+├── REASONING    analyze · plan · prioritize · decide
+├── EXECUTION    tool_call · file_op · API · code
+├── OBSERVATION  result · error · state · environment
+├── VERIFICATION test · validate · compare · inspect
+├── RECOVERY     retry · replan · rollback · escalate
+└── OUTPUT       result · evidence · changes · status</pre>
+
+    <p>This is a useful yardstick for comparing Grok, Claude Code, Codex, OpenCode, Cursor agents, or any local kernel you build.</p>
+
+    <h2>The bigger shift</h2>
+    <p>Chatbot → Tool-using LLM → Agent → Multi-agent system → Agentic runtime.</p>
+
+    <p>An LLM knows things. A tool-using LLM can do things. An agent decides what it needs to do, does it, inspects the result, and continues. An agentic runtime operates inside a defined environment with tools, memory, skills, policies, and verification loops.</p>
+
+    <p>The Grok sequence is the missing middle layer made visible: the agent builds its world model before it touches the world.</p>
+  </article>
+
+  <div class="panel">
+    <footer>
+      <a href="../blog.html">&larr; all notes</a> · MIT
+    </footer>
+  </div>
+
+</div>
+</body>
+</html>
