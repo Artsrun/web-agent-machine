@@ -114,10 +114,19 @@ function plan(text) {
   if (/navigate|go to|open url|browse/.test(lower)) return [{ id: id(), description: 'Navigate browser', capability: 'browser.navigate', args: { url: 'https://example.com' } }];
   return [{ id: id(), description: 'Acknowledge intent (no tool)' }];
 }
-// STUB — Async task A replaces this class body with real 6b/8b/9b tiered routing.
+// Tiered local model routing (6b / 8b / 9b) by judged complexity of the intent text.
 // Public contract Kernel relies on: `route(text: string): string` (sync, returns a model id).
 class ModelRouter {
-  route(text) { return /architect|refactor|multi-step|plan/i.test(text) ? '8b' : '6b'; }
+  // 9b: open-ended, multi-agent, or architectural reasoning.
+  static TIER_9B = /\b(architect(?:ure|ing|ural)?|design(?:s|ing)? a system|orchestrat(?:e|es|ing|ion)|multi[- ]agent|system design|end-?to-?end design)\b/i;
+  // 8b: moderate multi-step reasoning (refactor / plan / analyze / multi-step work).
+  static TIER_8B = /\b(refactor(?:s|ing|ed)?|plan(?:s|ning|ned)?|analy(?:ze|se|zing|sing|sis)|multi-?step|migrat(?:e|es|ing|ion)|optimi[sz]e(?:s|d|ing)?|debug(?:s|ging|ged)?|investigat(?:e|es|ing|ion)|compare|summari[sz]e)\b/i;
+
+  route(text) {
+    if (ModelRouter.TIER_9B.test(text)) return '9b';
+    if (ModelRouter.TIER_8B.test(text)) return '8b';
+    return '6b';
+  }
 }
 // STUB — Async task B replaces this class body with a real Web Worker offload.
 // Public contract Kernel relies on: `offloadPlan(text: string): Promise<Step[]>` (same shape as plan()).
