@@ -114,10 +114,21 @@ function plan(text) {
   if (/navigate|go to|open url|browse/.test(lower)) return [{ id: id(), description: 'Navigate browser', capability: 'browser.navigate', args: { url: 'https://example.com' } }];
   return [{ id: id(), description: 'Acknowledge intent (no tool)' }];
 }
+// STUB — Async task A replaces this class body with real 6b/8b/9b tiered routing.
+// Public contract Kernel relies on: `route(text: string): string` (sync, returns a model id).
+class ModelRouter {
+  route(text) { return /architect|refactor|multi-step|plan/i.test(text) ? '8b' : '6b'; }
+}
+// STUB — Async task B replaces this class body with a real Web Worker offload.
+// Public contract Kernel relies on: `offloadPlan(text: string): Promise<Step[]>` (same shape as plan()).
+class WorkerBridge {
+  async offloadPlan(text) { return plan(text); }
+}
 class Kernel {
   constructor() {
     this.bus = new EventBus(); this.broker = new CapabilityBroker(); this.principal = 'desktop-agent';
-    this.router = (t) => (/architect|refactor|multi-step|plan/i.test(t) ? '8b' : '6b');
+    this.modelRouter = new ModelRouter();
+    this.workerBridge = new WorkerBridge();
     this.fallbacks = [
       { from: 'browser.navigate', to: 'filesystem.write', mapArgs: () => ({ path: '/nav-fallback.txt', content: 'navigate was blocked — logged instead' }), reason: 'navigate denied/failed → log to file' },
       { from: 'browser.click', to: 'filesystem.write', mapArgs: (args) => ({ path: '/click-fallback.txt', content: `click blocked: ${JSON.stringify(args)}` }), reason: 'click denied/failed → log to file' },
@@ -129,7 +140,7 @@ class Kernel {
   async handleIntent(text) {
     const intent = { id: crypto.randomUUID(), text, timestamp: Date.now() };
     await this.bus.emit({ type: 'intent', payload: intent });
-    const model = this.router(text); const steps = plan(text);
+    const model = this.modelRouter.route(text); const steps = await this.workerBridge.offloadPlan(text);
     const planObj = { id: crypto.randomUUID(), intentId: intent.id, steps, model };
     await this.bus.emit({ type: 'plan', payload: planObj });
     for (const step of steps) { if (!step.capability) continue; const stopped = await this.executeWithFallback(step.capability, step.args || {}); if (stopped) break; }
