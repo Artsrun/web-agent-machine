@@ -22,11 +22,21 @@ Architecture **v0.2** · Implementation **Phase 2–4**
 - FileAgent + BrowserAgent (with HITL + automated fallbacks)
 - Live interactive console
 - Worker offload scaffolding
+- Notes + Playwright UI tests
 
 ## Quick Start
 
 ```bash
 cd site && npx serve .   # open /index.html
+```
+
+## Tests
+
+```bash
+npm install
+npx playwright install chromium
+npm test                  # against live GitHub Pages
+BASE_URL=http://localhost:3000 npm test   # against local serve
 ```
 
 ## License
