@@ -16,6 +16,12 @@
   --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* Kaomoji mix CJK, box-drawing and Canadian Syllabics glyphs that IBM Plex Mono
+     does not carry — name real CJK faces first so each face renders as one
+     consistent run instead of falling back glyph by glyph. */
+  --font-kao: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo",
+              "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans Symbols 2",
+              "Segoe UI Symbol", "MS Gothic", "IBM Plex Mono", monospace, sans-serif;
   --rail: 1px; --gap: 14px;
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -42,14 +48,22 @@ ul { margin: 0 0 14px; padding-left: 20px; color: #CFD4E8; }
 li { margin-bottom: 7px; }
 strong { color: var(--silk); font-weight: 600; }
 em { color: var(--silk); font-style: italic; }
-/* Kaomoji mix CJK, box-drawing and Canadian Syllabics glyphs that IBM Plex Mono
-   does not carry — name real CJK faces first so they render as one consistent run. */
-.face { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo",
-        "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans Symbols 2", "Segoe UI Symbol",
-        "MS Gothic", var(--font-mono), sans-serif;
-        text-align: center; font-size: 21px; color: var(--l-intent); margin: 22px 0; }
+.face { font-family: var(--font-kao); text-align: center; font-size: 21px; color: var(--l-intent); margin: 22px 0; }
 .face.small { font-size: 15px; color: var(--l-store); margin: 26px 0 0; }
-code.face-inline { font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", "Segoe UI Symbol", var(--font-mono), sans-serif; }
+.face-inline { font-family: var(--font-kao); }
+
+/* Reference table */
+.kao-wrap { overflow-x: auto; margin: 0 0 18px; border: var(--rail) solid var(--etch); }
+table.kao { border-collapse: collapse; width: 100%; font-size: 14px; }
+table.kao th { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dimmer); text-align: left; padding: 9px 14px; border-bottom: var(--rail) solid var(--etch); font-weight: 500; }
+table.kao td { padding: 9px 14px; border-bottom: var(--rail) solid rgba(42,48,80,.55); vertical-align: middle; }
+table.kao tr:last-child td { border-bottom: 0; }
+table.kao tr:hover td { background: rgba(79,214,196,.045); }
+table.kao td.k { font-family: var(--font-kao); font-size: 17px; color: var(--l-intent);
+  white-space: nowrap; width: 1%; padding-right: 20px; }
+table.kao td.u { color: #CFD4E8; }
+table.kao td.u b { color: var(--silk); font-weight: 600; }
 code { font-family: var(--font-mono); font-size: .88em; background: var(--wafer); border: 1px solid var(--etch); padding: 1px 5px; color: var(--l-kernel); }
 footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
 footer a { color: var(--dim); text-decoration: none; }
@@ -94,6 +108,50 @@ footer a:hover { color: var(--l-kernel); }
     <div class="face">┬─┬ノ( º _ ºノ)</div>
 
     <p>They read sideways-free &mdash; no head tilt required like <code>:-)</code> &mdash; because they borrowed the expressive <em>eyes</em> of Japanese typography. That is why <code class="face-inline">(¬_¬)</code> feels skeptical and <code class="face-inline">(◕‿◕)</code> feels sincere in a way Western smileys never quite managed.</p>
+
+    <h2>The twenty you will actually use</h2>
+    <p>Thousands exist. In practice a small set does almost all the work. Copy any row &mdash; they are plain text, so they paste anywhere.</p>
+
+    <div class="kao-wrap">
+      <table class="kao">
+        <thead><tr><th>Face</th><th>Reach for it when</th></tr></thead>
+        <tbody>
+          <tr><td class="k">¯\_(ツ)_/¯</td><td class="u"><b>Shrug.</b> Genuinely don't know, or don't care to litigate it.</td></tr>
+          <tr><td class="k">( ͡° ͜ʖ ͡°)</td><td class="u"><b>Lenny.</b> Deliberate innuendo. Read the room first.</td></tr>
+          <tr><td class="k">(⌐■_■)</td><td class="u"><b>Deal with it.</b> Landing an unbothered flex.</td></tr>
+          <tr><td class="k">(ಠ_ಠ)</td><td class="u"><b>Disapproval.</b> Someone force-pushed to main.</td></tr>
+          <tr><td class="k">(¬‿¬)</td><td class="u"><b>Smug.</b> You saw this coming and said nothing.</td></tr>
+          <tr><td class="k">(◔_◔)</td><td class="u"><b>Side-eye.</b> Skeptical but staying polite.</td></tr>
+          <tr><td class="k">(｡◕‿◕｡)</td><td class="u"><b>Sincere.</b> Warmth without irony &mdash; rare and therefore valuable.</td></tr>
+          <tr><td class="k">(≧◡≦)</td><td class="u"><b>Happy.</b> Everyday pleased, eyes shut.</td></tr>
+          <tr><td class="k">o(≧▽≦)o</td><td class="u"><b>Excited.</b> The build finally passed.</td></tr>
+          <tr><td class="k">ヽ(´▽`)/</td><td class="u"><b>Celebrating.</b> Arms up, shipped it.</td></tr>
+          <tr><td class="k">\(^o^)/</td><td class="u"><b>Hooray.</b> Same energy, fewer bytes.</td></tr>
+          <tr><td class="k">(づ｡◕‿‿◕｡)づ</td><td class="u"><b>Hug.</b> Consoling a teammate after a bad deploy.</td></tr>
+          <tr><td class="k">(T_T)</td><td class="u"><b>Crying.</b> Comic despair, not real grief.</td></tr>
+          <tr><td class="k">(ﾉ_&lt;。)</td><td class="u"><b>Sobbing.</b> Escalated, still comic.</td></tr>
+          <tr><td class="k">(´･_･`)</td><td class="u"><b>Worried.</b> Softening bad news you are about to deliver.</td></tr>
+          <tr><td class="k">(・_・;)</td><td class="u"><b>Awkward.</b> Sweat drop. That was your bug.</td></tr>
+          <tr><td class="k">(；一_一)</td><td class="u"><b>Exasperated.</b> Third time explaining the same thing.</td></tr>
+          <tr><td class="k">(ノ°益°)ノ</td><td class="u"><b>Rage.</b> Table flip's louder cousin, no furniture involved.</td></tr>
+          <tr><td class="k">(=^･ω･^=)</td><td class="u"><b>Cat.</b> No subtext. Just a cat.</td></tr>
+          <tr><td class="k">m(_ _)m</td><td class="u"><b>Bow.</b> Apology or thanks, with actual humility.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>How to use them without looking silly</h2>
+    <ul>
+      <li><strong>Put it at the end.</strong> A kaomoji is punctuation, not a subject. It closes the thought and colours what came before it.</li>
+      <li><strong>One per message.</strong> Two competing faces cancel each other out and read as noise.</li>
+      <li><strong>Escape it in Markdown.</strong> <code>_</code> means italics and <code>\</code> escapes, so the shrug collapses into mush. Type <code>¯\\\_(ツ)\_/¯</code> to get <span class="face-inline">¯\_(ツ)_/¯</span>, or wrap it in backticks.</li>
+      <li><strong>Use <code>utf8mb4</code>, not <code>utf8</code>.</strong> MySQL's <code>utf8</code> is three bytes and silently truncates. A face is many codepoints &mdash; a <code>VARCHAR(20)</code> can cut one mid-sequence and leave a replacement character.</li>
+      <li><strong>Count characters, not glyphs.</strong> <span class="face-inline">(づ｡◕‿‿◕｡)づ</span> is one face but ten codepoints and twenty-six UTF-8 bytes. Anything with a length limit &mdash; SMS, a tweet, a commit subject &mdash; counts the codepoints.</li>
+      <li><strong>Name a font stack.</strong> Most monospace and UI fonts carry no CJK glyphs, so each character falls back separately and the face pulls apart. Declare real CJK families first &mdash; this page does exactly that.</li>
+      <li><strong>Mind screen readers.</strong> They announce these character by character. Keep them out of buttons, labels, and anything load-bearing; decorative use in prose is fine.</li>
+      <li><strong>Save them as snippets.</strong> Text replacement on macOS, iOS, or your editor beats retyping combining characters by hand every time.</li>
+      <li><strong>Skip them in formal writing.</strong> Incident reports, legal text, and customer apologies are worse with a face, not better.</li>
+    </ul>
 
     <h2>The takeaway</h2>
     <p>If a picture is worth a thousand words, a kaomoji is a picture <em>made of</em> words &mdash; at one ten-thousandth the bandwidth. Cheap and cool are not a trade-off here. They are the same feature.</p>
