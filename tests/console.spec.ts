@@ -26,6 +26,6 @@ test.describe('Console', () => {
     await page.locator('#cmd button').click();
 
     // Wait for at least one new bus entry after boot
-    await expect(page.locator('#bus li')).toHaveCount({ min: 2 }, { timeout: 5000 });
+    await expect.poll(() => page.locator('#bus li').count(), { timeout: 5000 }).toBeGreaterThanOrEqual(2);
   });
 });
