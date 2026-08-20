@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mask">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mastering Terminal Commands for LLM Enthusiasts — Web Agent Machine</title>
+<meta name="description" content="Essential terminal commands for file navigation, text manipulation, process control, and system monitoring. The practical control plane for anyone working with LLMs and agents." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --etch: #2A3050;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --l-kernel: #4FD6C4; --l-intent: #F5A524; --l-store: #5FD68A;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --rail: 1px; --gap: 14px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 720px; margin-inline: auto; padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); }
+.panel { background: var(--substrate); border: var(--rail) solid var(--etch); }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--l-kernel); }
+.rail a.back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.rail a.back:hover { color: var(--l-kernel); }
+article { padding: 28px 26px 34px; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 10px; }
+h1 { font-family: var(--font-display); font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -.01em; }
+.byline { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-bottom: 26px; }
+h2 { font-family: var(--font-display); font-size: 18px; margin: 28px 0 10px; color: var(--l-kernel); letter-spacing: .01em; }
+p { margin: 0 0 14px; color: #CFD4E8; }
+ul { margin: 0 0 14px; padding-left: 0; list-style: none; color: #CFD4E8; }
+li { margin-bottom: 11px; padding-left: 0; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--wafer); border: 1px solid var(--etch); padding: 1px 6px; color: var(--l-kernel); }
+strong { color: var(--silk); font-weight: 600; }
+.cmd { font-family: var(--font-mono); color: var(--l-kernel); }
+footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--l-kernel); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="panel rail">
+    <a class="mark" href="../index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="../blog.html">&larr; notes</a>
+  </div>
+
+  <article class="panel">
+    <div class="eyebrow">Notes</div>
+    <h1>Mastering Terminal Commands for LLM Enthusiasts</h1>
+    <div class="byline">rev 0.1 · notes · ~3 min read</div>
+
+    <p>These commands give you almost complete control over any Unix-like terminal. Learn them once and you stop fighting the machine.</p>
+
+    <h2>File System Navigation & Management</h2>
+    <ul>
+      <li><code>pwd</code> — absolute path of the current directory</li>
+      <li><code>ls -la</code> — all files including hidden, with permissions and sizes</li>
+      <li><code>cd &lt;dir&gt;</code> — change directory (<code>cd ..</code> up, <code>cd ~</code> home)</li>
+      <li><code>mkdir -p &lt;path&gt;</code> — create folder + any missing parents</li>
+      <li><code>cp -r &lt;src&gt; &lt;dst&gt;</code> — recursive copy</li>
+      <li><code>mv &lt;src&gt; &lt;dst&gt;</code> — move or rename</li>
+      <li><code>rm -rf &lt;path&gt;</code> — recursive force delete (respect it)</li>
+    </ul>
+
+    <h2>Viewing & Editing Files</h2>
+    <ul>
+      <li><code>cat &lt;file&gt;</code> — dump entire file to stdout</li>
+      <li><code>less &lt;file&gt;</code> — scrollable viewer (<code>q</code> to quit)</li>
+      <li><code>head -n 10</code> / <code>tail -n 10</code> — first or last 10 lines<br><code>tail -f</code> streams live log updates</li>
+      <li><code>nano &lt;file&gt;</code> — simple in-terminal editor</li>
+    </ul>
+
+    <h2>Text Processing & Searching</h2>
+    <ul>
+      <li><code>grep -rn "term" .</code> — recursive search for a string in all files</li>
+      <li><code>find . -name "*.txt"</code> — locate files by name pattern</li>
+      <li><code>wc -l &lt;file&gt;</code> — count lines</li>
+    </ul>
+
+    <h2>System Operations & Networking</h2>
+    <ul>
+      <li><code>ps aux</code> — every running process</li>
+      <li><code>kill -9 &lt;PID&gt;</code> — force kill by process ID</li>
+      <li><code>df -h</code> / <code>du -sh &lt;folder&gt;</code> — disk free space / folder size (human readable)</li>
+      <li><code>curl -I &lt;url&gt;</code> — fetch HTTP headers only (connectivity / API smoke test)</li>
+    </ul>
+
+    <p>Master these and the terminal stops being a barrier. It becomes the control plane.</p>
+  </article>
+
+  <div class="panel">
+    <footer>
+      <a href="../blog.html">&larr; all notes</a> · MIT
+    </footer>
+  </div>
+
+</div>
+</body>
+</html>

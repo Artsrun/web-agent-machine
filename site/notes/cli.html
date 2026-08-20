@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mask">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The CLI Never Died — Web Agent Machine</title>
+<meta name="description" content="From teletypes to Bash to PowerShell and WSL. Why the text interface remains the most durable control plane for agents." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --etch: #2A3050;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --l-kernel: #4FD6C4; --l-intent: #F5A524; --l-store: #5FD68A;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --rail: 1px; --gap: 14px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 720px; margin-inline: auto; padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); }
+.panel { background: var(--substrate); border: var(--rail) solid var(--etch); }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--l-kernel); }
+.rail a.back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.rail a.back:hover { color: var(--l-kernel); }
+article { padding: 28px 26px 34px; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 10px; }
+h1 { font-family: var(--font-display); font-size: 28px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.01em; }
+.byline { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-bottom: 26px; }
+h2 { font-family: var(--font-display); font-size: 19px; margin: 30px 0 8px; color: var(--l-kernel); letter-spacing: .01em; }
+p { margin: 0 0 14px; color: #CFD4E8; }
+ul { margin: 0 0 14px; padding-left: 20px; color: #CFD4E8; }
+li { margin-bottom: 7px; }
+strong { color: var(--silk); font-weight: 600; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--wafer); border: 1px solid var(--etch); padding: 1px 5px; color: var(--l-kernel); }
+footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--l-kernel); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="panel rail">
+    <a class="mark" href="../index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="../blog.html">&larr; notes</a>
+  </div>
+
+  <article class="panel">
+    <div class="eyebrow">Notes</div>
+    <h1>The CLI Never Died — It Just Got Cross-Platform</h1>
+    <div class="byline">rev 0.1 · notes · ~3 min read</div>
+
+    <p>A CLI is a text-based environment. You type commands. The machine answers. No mouse, no icons, no visual chrome — just the purest interface we ever built.</p>
+
+    <p><strong>Bash</strong> (Bourne Again SHell) is the most common interpreter on Linux and historical macOS. It takes the text you type — <code>ls</code>, <code>mkdir</code>, <code>grep</code> — and turns it into system actions. It is also a full scripting language.</p>
+
+    <h2>A short history</h2>
+    <ul>
+      <li><strong>1960s — Teletypes</strong><br>Commands typed on a keyboard, answers printed on paper. The original TTY.</li>
+      <li><strong>1970s — Unix + Bourne shell</strong><br>CRT terminals replace paper. Modular commands + pipes. The philosophy that still runs the internet.</li>
+      <li><strong>1980s — MS-DOS</strong><br>The PC gets its own command line. Different verbs (<code>dir</code> instead of <code>ls</code>).</li>
+      <li><strong>1989 — Bash</strong><br>Brian Fox writes a free, feature-rich replacement for the original Bourne shell for the GNU project. It becomes the default on Linux.</li>
+    </ul>
+
+    <h2>The great unification</h2>
+    <p>For decades the command lines were walled gardens. Then the walls fell:</p>
+    <ul>
+      <li><strong>PowerShell</strong> — Microsoft rewrote it as open-source and cross-platform. Same tool on Windows, macOS, and Linux.</li>
+      <li><strong>WSL</strong> — Real Linux (including Bash) running natively inside Windows. No VM tax.</li>
+      <li><strong>Modern CLIs</strong> — Git, Docker, AWS CLI, almost everything new is written in Go or Rust. One binary, identical flags, every OS.</li>
+    </ul>
+
+    <h2>Why this still matters for agents</h2>
+    <p>Text is the cheapest, most composable, most capability-securable interface we have. A well-designed CLI is already an agent runtime — just one that humans can also drive. Browser agents, local kernels, and remote tool-using models all inherit the same design pressure: low bandwidth, high precision, explicit verbs.</p>
+
+    <p>The shell never died. It just stopped caring which OS you were on.</p>
+  </article>
+
+  <div class="panel">
+    <footer>
+      <a href="../blog.html">&larr; all notes</a> · MIT
+    </footer>
+  </div>
+
+</div>
+</body>
+</html>

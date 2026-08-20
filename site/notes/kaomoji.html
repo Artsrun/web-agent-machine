@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mask">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Why Kaomoji Are Cheap and Cool — Web Agent Machine</title>
+<meta name="description" content="Why plain-text kaomoji beat image emoji: ~10,000x smaller, zero requests, infinitely expressive — the case for the cheapest cool on the internet." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --etch: #2A3050;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --l-kernel: #4FD6C4; --l-intent: #F5A524; --l-store: #5FD68A;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --rail: 1px; --gap: 14px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 720px; margin-inline: auto; padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); }
+.panel { background: var(--substrate); border: var(--rail) solid var(--etch); }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--l-kernel); }
+.rail a.back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.rail a.back:hover { color: var(--l-kernel); }
+article { padding: 28px 26px 34px; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 10px; }
+h1 { font-family: var(--font-display); font-size: 30px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.01em; }
+.byline { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-bottom: 26px; }
+h2 { font-family: var(--font-display); font-size: 19px; margin: 30px 0 8px; color: var(--l-kernel); letter-spacing: .01em; }
+p { margin: 0 0 14px; color: #CFD4E8; }
+ul { margin: 0 0 14px; padding-left: 20px; color: #CFD4E8; }
+li { margin-bottom: 7px; }
+strong { color: var(--silk); font-weight: 600; }
+em { color: var(--silk); font-style: italic; }
+.face { font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo",
+        "Noto Sans CJK JP", "Noto Sans JP", "Noto Sans Symbols 2", "Segoe UI Symbol",
+        "MS Gothic", var(--font-mono), sans-serif;
+        text-align: center; font-size: 21px; color: var(--l-intent); margin: 22px 0; }
+.face.small { font-size: 15px; color: var(--l-store); margin: 26px 0 0; }
+code.face-inline { font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", "Segoe UI Symbol", var(--font-mono), sans-serif; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--wafer); border: 1px solid var(--etch); padding: 1px 5px; color: var(--l-kernel); }
+footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--l-kernel); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="panel rail">
+    <a class="mark" href="../index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="../blog.html">&larr; notes</a>
+  </div>
+
+  <article class="panel">
+    <div class="eyebrow">Notes</div>
+    <h1>Why Kaomoji Are Cheap and Cool</h1>
+    <div class="byline">rev 0.2 · notes · ~2 min read</div>
+
+    <p>Every image on a page costs something: bytes, a CDN request, an alt text, a designer's afternoon. A kaomoji costs a few characters. Here is the whole argument in one line:</p>
+
+    <div class="face">(ノ◕ヮ◕)ノ*:・゚✧</div>
+
+    <h2>Cheap, literally</h2>
+    <p>A kaomoji is plain Unicode text. That means:</p>
+    <ul>
+      <li><strong>~10–30 bytes</strong> versus 50–500 KB for an emoji sticker or reaction GIF — roughly <strong>10,000× smaller</strong>.</li>
+      <li><strong>Zero HTTP requests.</strong> It ships inside the HTML you were sending anyway.</li>
+      <li><strong>No licensing, no asset pipeline, no image CDN.</strong> You type it, it exists.</li>
+      <li><strong>Copy-paste durable.</strong> It survives plain-text email, RSS readers, terminals, and SMS — places where images die.</li>
+    </ul>
+
+    <div class="face">ᕕ( ᐛ )ᕗ</div>
+
+    <h2>Cool, genuinely</h2>
+    <p>Emoji are rendered by the platform — your <code>&#128578;</code> looks different on every device, and everyone reaches for the same fifty. Kaomoji are <em>composed</em>, not selected. A table flip carries more precise frustration than any yellow circle:</p>
+
+    <div class="face">(╯°□°）╯︵ ┻━┻</div>
+
+    <p>…and putting the table back is a whole narrative arc in fourteen characters:</p>
+
+    <div class="face">┬─┬ノ( º _ ºノ)</div>
+
+    <p>They read sideways-free — no head tilt required like <code>:-)</code> — because they borrowed the expressive <em>eyes</em> of Japanese typography. That is why <code class="face-inline">(¬_¬)</code> feels skeptical and <code class="face-inline">(◕‿◕)</code> feels sincere in a way Western smileys never quite managed.</p>
+
+    <h2>The takeaway</h2>
+    <p>If a picture is worth a thousand words, a kaomoji is a picture <em>made of</em> words — at one ten-thousandth the bandwidth. Cheap and cool are not a trade-off here. They are the same feature.</p>
+
+    <div class="face small">╰(▔∀▔)╯ &nbsp;fin</div>
+  </article>
+
+  <div class="panel">
+    <footer>
+      <a href="../blog.html">&larr; all notes</a> · MIT
+    </footer>
+  </div>
+
+</div>
+</body>
+</html>
