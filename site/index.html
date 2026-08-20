@@ -128,10 +128,45 @@ class ModelRouter {
     return '6b';
   }
 }
-// STUB — Async task B replaces this class body with a real Web Worker offload.
-// Public contract Kernel relies on: `offloadPlan(text: string): Promise<Step[]>` (same shape as plan()).
+// Real Web Worker offload. Public contract Kernel relies on:
+// `offloadPlan(text: string): Promise<Step[]>` (same shape as plan()).
+// The plan() logic below is duplicated inside the worker source string rather
+// than shared, because a Worker runs in its own separate global scope and
+// cannot see or call functions defined in the main document (no closures,
+// no shared `self`/`window`) — the only way to hand it code is to give it
+// its own copy of the source, e.g. via a Blob URL as done here.
 class WorkerBridge {
-  async offloadPlan(text) { return plan(text); }
+  constructor() {
+    const workerSrc = `
+      function plan(text) {
+        const lower = text.toLowerCase(); const id = () => crypto.randomUUID();
+        if (/write|save|create/.test(lower) && /file/.test(lower)) return [{ id: id(), description: 'Write file', capability: 'filesystem.write', args: { path: '/notes.txt', content: 'hello from agent' } }];
+        if (/list|ls|dir/.test(lower)) return [{ id: id(), description: 'List directory', capability: 'filesystem.list', args: { path: '/' } }];
+        if (/read|open|show|cat/.test(lower) && /file|notes/.test(lower)) return [{ id: id(), description: 'Read file', capability: 'filesystem.read', args: { path: '/notes.txt' } }];
+        if (/navigate|go to|open url|browse/.test(lower)) return [{ id: id(), description: 'Navigate browser', capability: 'browser.navigate', args: { url: 'https://example.com' } }];
+        return [{ id: id(), description: 'Acknowledge intent (no tool)' }];
+      }
+      self.onmessage = (e) => {
+        const { id, text } = e.data;
+        console.log('[WorkerBridge worker] planning inside Worker thread for:', text);
+        self.postMessage({ id, steps: plan(text) });
+      };
+    `;
+    this.worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' })));
+    this.pending = new Map();
+    this.worker.onmessage = (e) => {
+      const { id, steps } = e.data;
+      this.pending.get(id)?.(steps);
+      this.pending.delete(id);
+    };
+  }
+  offloadPlan(text) {
+    return new Promise((resolve) => {
+      const id = crypto.randomUUID();
+      this.pending.set(id, resolve);
+      this.worker.postMessage({ id, text });
+    });
+  }
 }
 class Kernel {
   constructor() {
