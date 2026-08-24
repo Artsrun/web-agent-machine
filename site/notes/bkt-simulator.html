@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mask">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BKT Simulator v2 — Web Agent Machine</title>
+<meta name="description" content="Bayesian Knowledge Tracing lab with step history, Bayes intermediate values, and mastery trajectory graph." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --etch: #2A3050;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --l-kernel: #4FD6C4; --l-intent: #F5A524; --l-store: #5FD68A; --l-policy: #FF5C5C; --l-conc: #7B9CFF;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --rail: 1px; --gap: 14px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 1100px; margin-inline: auto; padding: var(--gap); display: grid; grid-template-rows: auto auto 1fr auto; gap: var(--gap); }
+.panel { background: var(--substrate); border: var(--rail) solid var(--etch); min-height: 0; }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--l-kernel); }
+.rail a.back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.content { display: grid; gap: var(--gap); grid-template-columns: 330px 1fr; min-height: 0; }
+.stack { display: grid; gap: var(--gap); min-height: 0; }
+.block { padding: 12px; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 8px; }
+h1 { margin: 0 0 6px; font-family: var(--font-display); font-size: 24px; letter-spacing: -.01em; }
+p { margin: 0; color: #cfd4e8; }
+.subtle { font-family: var(--font-mono); font-size: 11px; color: var(--dim); }
+fieldset { border: 1px solid var(--etch); margin: 0; padding: 10px; }
+legend { font-family: var(--font-mono); color: var(--dim); padding: 0 6px; font-size: 11px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+label { display: grid; gap: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--dim); }
+input[type="number"] { width: 100%; background: #10162a; color: var(--silk); border: 1px solid var(--etch); padding: 8px; font-family: var(--font-mono); font-size: 12px; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+button { border: 0; padding: 9px 10px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; }
+#btn-correct { background: var(--l-store); color: #09120e; }
+#btn-incorrect { background: var(--l-policy); color: #200909; }
+#btn-reset { background: var(--l-conc); color: #0a1028; grid-column: 1 / -1; }
+.kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.kpi div { background: #10162a; border: 1px solid var(--etch); padding: 8px; }
+.kpi b { display: block; font-size: 11px; color: var(--dim); font-family: var(--font-mono); margin-bottom: 2px; font-weight: 500; }
+.kpi span { font-family: var(--font-mono); font-size: 16px; color: var(--l-kernel); }
+#timeline { margin: 0; padding: 10px 12px; list-style: none; height: 220px; overflow-y: auto; border-top: 1px solid var(--etch); }
+#timeline li { padding: 4px 0; border-bottom: 1px dashed #29304e; font-family: var(--font-mono); font-size: 11px; color: #d7dbeb; }
+.charts { display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
+.legend { display: flex; gap: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--dim); padding: 0 12px 10px; }
+.dot { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 6px; }
+.dot.prior { background: var(--l-intent); }
+.dot.posterior { background: var(--l-policy); }
+.dot.mastery { background: var(--l-store); }
+canvas { width: 100%; height: 280px; background: #0f1425; border-top: 1px solid var(--etch); border-bottom: 1px solid var(--etch); }
+table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
+th, td { border-bottom: 1px solid #29304e; text-align: left; padding: 6px 8px; }
+th { color: var(--dim); font-weight: 500; }
+@media (max-width: 900px) {
+  .content { grid-template-columns: 1fr; }
+  canvas { height: 240px; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="panel rail">
+    <a class="mark" href="../index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="../blog.html">&larr; notes</a>
+  </div>
+
+  <section class="panel block">
+    <div class="eyebrow">BKT Lab v2</div>
+    <h1>Bayesian Knowledge Tracing Simulator</h1>
+    <p>Update order: observation &rarr; Bayes update (guess/slip) &rarr; learning transition. Parameters are configuration; <code>P(L<sub>t</sub>)</code> is learner state that evolves across attempts.</p>
+  </section>
+
+  <div class="content">
+    <aside class="stack">
+      <section class="panel block">
+        <div class="eyebrow">Parameters</div>
+        <fieldset>
+          <legend>Model Configuration</legend>
+          <div class="grid">
+            <label>P(L0)<input id="p_l0" type="number" min="0" max="1" step="0.01" value="0.10" /></label>
+            <label>T<input id="p_t" type="number" min="0" max="1" step="0.01" value="0.20" /></label>
+            <label>G<input id="p_g" type="number" min="0" max="1" step="0.01" value="0.25" /></label>
+            <label>S<input id="p_s" type="number" min="0" max="1" step="0.01" value="0.10" /></label>
+          </div>
+        </fieldset>
+        <div class="controls">
+          <button id="btn-correct" type="button">Mark Correct</button>
+          <button id="btn-incorrect" type="button">Mark Incorrect</button>
+          <button id="btn-reset" type="button">Reset Learner State</button>
+        </div>
+        <div class="kpi">
+          <div><b>Current P(L)</b><span id="mastery">0.1000</span></div>
+          <div><b>Attempts</b><span id="attempts">0</span></div>
+        </div>
+        <p class="subtle" style="margin-top:8px">Changing inputs does not rewrite history; reset applies new parameters to learner state.</p>
+      </section>
+
+      <section class="panel">
+        <div class="block">
+          <div class="eyebrow">Event Timeline</div>
+        </div>
+        <ol id="timeline" aria-live="polite"></ol>
+      </section>
+    </aside>
+
+    <main class="stack">
+      <section class="panel charts">
+        <div class="block">
+          <div class="eyebrow">Mastery Trajectory</div>
+          <p class="subtle">Tracks prior, Bayes posterior, and post-learning mastery for each step.</p>
+        </div>
+        <div class="legend">
+          <span><i class="dot prior"></i>prior</span>
+          <span><i class="dot posterior"></i>posterior</span>
+          <span><i class="dot mastery"></i>mastery</span>
+        </div>
+        <canvas id="trajectory" width="720" height="280"></canvas>
+      </section>
+
+      <section class="panel block">
+        <div class="eyebrow">Latest Bayes Breakdown</div>
+        <table>
+          <thead>
+            <tr><th>Quantity</th><th>Value</th></tr>
+          </thead>
+          <tbody id="step-math">
+            <tr><td>step</td><td>0</td></tr>
+            <tr><td>observation</td><td>n/a</td></tr>
+            <tr><td>prior P(L)</td><td>0.1000</td></tr>
+            <tr><td>P(correct)</td><td>n/a</td></tr>
+            <tr><td>P(incorrect)</td><td>n/a</td></tr>
+            <tr><td>posterior P(L|obs)</td><td>n/a</td></tr>
+            <tr><td>post-learning P(L')</td><td>0.1000</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script type="module">
+const q = (id) => document.getElementById(id);
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const toN = (v, fallback) => {
+  const parsed = Number(v);
+  return Number.isFinite(parsed) ? clamp01(parsed) : fallback;
+};
+const fmt = (v) => Number(v).toFixed(4);
+
+let currentMastery = null;
+let step = 0;
+const history = [];
+
+const masteryEl = q('mastery');
+const attemptsEl = q('attempts');
+const timelineEl = q('timeline');
+const mathEl = q('step-math');
+const canvas = q('trajectory');
+const ctx = canvas.getContext('2d');
+
+const readParams = () => ({
+  l0: toN(q('p_l0').value, 0.1),
+  t: toN(q('p_t').value, 0.2),
+  g: toN(q('p_g').value, 0.25),
+  s: toN(q('p_s').value, 0.1),
+});
+
+const writeMath = (row) => {
+  const val = (x) => (x == null ? 'n/a' : fmt(x));
+  mathEl.innerHTML = `
+    <tr><td>step</td><td>${row.step}</td></tr>
+    <tr><td>observation</td><td>${row.observation}</td></tr>
+    <tr><td>prior P(L)</td><td>${val(row.prior)}</td></tr>
+    <tr><td>P(correct)</td><td>${val(row.pCorrect)}</td></tr>
+    <tr><td>P(incorrect)</td><td>${val(row.pIncorrect)}</td></tr>
+    <tr><td>posterior P(L|obs)</td><td>${val(row.posterior)}</td></tr>
+    <tr><td>post-learning P(L')</td><td>${val(row.mastery)}</td></tr>
+  `;
+};
+
+const appendTimeline = (row) => {
+  const li = document.createElement('li');
+  li.textContent = `#${row.step} ${row.observation.toUpperCase()} | prior=${fmt(row.prior)} posterior=${fmt(row.posterior)} mastery=${fmt(row.mastery)}`;
+  timelineEl.appendChild(li);
+  timelineEl.scrollTop = timelineEl.scrollHeight;
+};
+
+const renderGraph = () => {
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0f1425';
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.strokeStyle = '#2A3050';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i += 1) {
+    const y = (h - 20) - (i / 4) * (h - 40);
+    ctx.beginPath();
+    ctx.moveTo(36, y);
+    ctx.lineTo(w - 12, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = '#7C86A8';
+  ctx.font = '11px "IBM Plex Mono", monospace';
+  ctx.fillText('1.0', 10, 18);
+  ctx.fillText('0.5', 10, h / 2);
+  ctx.fillText('0.0', 10, h - 12);
+
+  const points = [{ step: 0, prior: currentMastery, posterior: currentMastery, mastery: currentMastery }, ...history];
+  const maxStep = Math.max(1, points.length - 1);
+  const xOf = (s) => 36 + (s / maxStep) * (w - 48);
+  const yOf = (p) => (h - 20) - clamp01(p) * (h - 40);
+
+  const drawSeries = (key, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach((r, i) => {
+      const x = xOf(i);
+      const y = yOf(r[key]);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  };
+
+  drawSeries('prior', '#F5A524');
+  drawSeries('posterior', '#FF5C5C');
+  drawSeries('mastery', '#5FD68A');
+};
+
+const resetState = () => {
+  const params = readParams();
+  currentMastery = params.l0;
+  step = 0;
+  history.length = 0;
+  timelineEl.innerHTML = '';
+  masteryEl.textContent = fmt(currentMastery);
+  attemptsEl.textContent = '0';
+  writeMath({ step: 0, observation: 'n/a', prior: currentMastery, pCorrect: null, pIncorrect: null, posterior: null, mastery: currentMastery });
+  renderGraph();
+};
+
+const runStep = (observation) => {
+  if (currentMastery == null) resetState();
+  const params = readParams();
+  const prior = currentMastery;
+  const pCorrect = prior * (1 - params.s) + (1 - prior) * params.g;
+  const pIncorrect = prior * params.s + (1 - prior) * (1 - params.g);
+
+  const posterior = observation === 'correct'
+    ? (prior * (1 - params.s)) / (pCorrect || 1)
+    : (prior * params.s) / (pIncorrect || 1);
+  const mastery = posterior + (1 - posterior) * params.t;
+
+  step += 1;
+  currentMastery = clamp01(mastery);
+
+  const row = { step, observation, prior, pCorrect, pIncorrect, posterior, mastery: currentMastery };
+  history.push(row);
+
+  masteryEl.textContent = fmt(currentMastery);
+  attemptsEl.textContent = String(history.length);
+  appendTimeline(row);
+  writeMath(row);
+  renderGraph();
+};
+
+q('btn-correct').addEventListener('click', () => runStep('correct'));
+q('btn-incorrect').addEventListener('click', () => runStep('incorrect'));
+q('btn-reset').addEventListener('click', () => resetState());
+
+resetState();
+window.__bktLab = { readParams, resetState, runStep, getHistory: () => [...history], getMastery: () => currentMastery };
+</script>
+</body>
+</html>
