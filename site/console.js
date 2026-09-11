@@ -341,10 +341,10 @@ q('cmd').addEventListener('submit', async (e) => {
 });
 
 document.querySelectorAll('.chip').forEach((btn) => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     const text = btn.dataset.cmd;
     q('cmd-input').value = '';
-    runIntent(text);
+    await runIntent(text);
   });
 });
 

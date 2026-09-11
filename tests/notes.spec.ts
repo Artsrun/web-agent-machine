@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Notes', () => {
-  test('index lists all notes posts', async ({ page }) => {
+  test('index lists all note posts', async ({ page }) => {
     await page.goto('./blog.html');
 
     await expect(page.locator('h1')).toHaveText('Notes');
@@ -16,6 +16,17 @@ test.describe('Notes', () => {
     await expect(links.nth(4)).toContainText('Mastering Terminal Commands');
     await expect(links.nth(5)).toContainText('The CLI Never Died');
     await expect(links.nth(6)).toContainText('Why Kaomoji Are Cheap');
+  });
+
+  test('index links navigate to new note pages', async ({ page }) => {
+    await page.goto('./blog.html');
+
+    await page.locator('.post-list a[href="./notes/scanline-to-web.html"]').click();
+    await expect(page.locator('h1')).toContainText('Scan-Line to Splat');
+
+    await page.goto('./blog.html');
+    await page.locator('.post-list a[href="./notes/context-rot.html"]').click();
+    await expect(page.locator('h1')).toContainText('Context Rot Mechanisms');
   });
 
   test('context rot note loads', async ({ page }) => {
