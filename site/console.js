@@ -225,6 +225,10 @@ const pushBus = (src, ev, msg, layer = 'kernel') => {
   bus.prepend(li);
   while (bus.children.length > 40) bus.lastElementChild.remove();
 };
+const quickChips = Array.from(document.querySelectorAll('.chip'));
+const setQuickChipsDisabled = (disabled) => {
+  quickChips.forEach((chip) => { chip.disabled = disabled; });
+};
 
 const showResult = (label, body, meta = '') => {
   q('empty').style.display = 'none';
@@ -325,11 +329,20 @@ q('hitl-deny').onclick = async () => {
 };
 
 const runIntent = async (text) => {
+  if (runIntent.active) return;
   const input = q('cmd-input');
+  runIntent.active = true;
   input.disabled = true;
+  setQuickChipsDisabled(true);
   try { await kernel.handleIntent(text); }
-  finally { input.disabled = false; input.focus(); }
+  finally {
+    setQuickChipsDisabled(false);
+    input.disabled = false;
+    input.focus();
+    runIntent.active = false;
+  }
 };
+runIntent.active = false;
 
 q('cmd').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -340,7 +353,7 @@ q('cmd').addEventListener('submit', async (e) => {
   await runIntent(text);
 });
 
-document.querySelectorAll('.chip').forEach((btn) => {
+quickChips.forEach((btn) => {
   btn.addEventListener('click', async () => {
     const text = btn.dataset.cmd;
     q('cmd-input').value = '';

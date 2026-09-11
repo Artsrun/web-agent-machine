@@ -104,6 +104,12 @@ test.describe('Notes', () => {
     await expect(page.locator('#step-math')).toContainText('P(correct)');
 
     await page.locator('#btn-reset').click();
+    await expect(page.locator('#attempts')).toHaveText('0');
+    await expect(page.locator('#mastery')).toHaveText('0.1000');
+    await expect(page.locator('#timeline li')).toHaveCount(0);
+    await expect(page.locator('#step-math')).toContainText('0');
+    await expect(page.locator('#step-math')).toContainText('n/a');
+
     await page.locator('#btn-incorrect').click();
     await expect(page.locator('#attempts')).toHaveText('1');
     await expect(page.locator('#timeline li')).toHaveCount(1);
