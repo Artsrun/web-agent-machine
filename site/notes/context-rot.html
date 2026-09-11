@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mask">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Context Rot Mechanisms — Web Agent Machine</title>
+<meta name="description" content="Context rot is not overflow. The tokens are still in the prompt. The model uses them worse. Position bias, attention dilution, transcript debt, and why the window is a working set." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --etch: #2A3050;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --l-kernel: #4FD6C4; --l-intent: #F5A524; --l-store: #5FD68A;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --rail: 1px; --gap: 14px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 720px; margin-inline: auto; padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); }
+.panel { background: var(--substrate); border: var(--rail) solid var(--etch); }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--l-kernel); }
+.rail a.back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.rail a.back:hover { color: var(--l-kernel); }
+article { padding: 28px 26px 34px; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 10px; }
+h1 { font-family: var(--font-display); font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -.01em; }
+.byline { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-bottom: 26px; }
+h2 { font-family: var(--font-display); font-size: 18px; margin: 28px 0 10px; color: var(--l-kernel); letter-spacing: .01em; }
+h3 { font-family: var(--font-display); font-size: 15px; margin: 20px 0 8px; color: var(--silk); }
+p { margin: 0 0 14px; color: #CFD4E8; }
+ul { margin: 0 0 14px; padding-left: 0; list-style: none; color: #CFD4E8; }
+li { margin-bottom: 9px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--wafer); border: 1px solid var(--etch); padding: 1px 6px; color: var(--l-kernel); }
+strong { color: var(--silk); font-weight: 600; }
+pre {
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.45;
+  background: var(--wafer); border: 1px solid var(--etch);
+  padding: 14px 16px; overflow-x: auto; color: #B8C0DC; margin: 0 0 16px;
+}
+footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--l-kernel); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="panel rail">
+    <a class="mark" href="../index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="../blog.html">&larr; notes</a>
+  </div>
+
+  <article class="panel">
+    <div class="eyebrow">Notes</div>
+    <h1>Context Rot Mechanisms</h1>
+    <div class="byline">rev 0.1 · notes · ~6 min read</div>
+
+    <p>Context rot is not overflow. Overflow is a hard reject. Rot is: the tokens are still in the prompt, and the model uses them worse. Gradient, not cliff.</p>
+
+    <p>The window is a working set, not an archive. Everything that is not load-bearing for <em>this</em> step is an adversarial distractor with a softmax vote.</p>
+
+    <h2>Two failures under one name</h2>
+    <pre>POSITION BIAS          LENGTH DEGRADATION
+(lost-in-the-middle)   (true rot)
+
+U-shaped recall        quality falls as n grows
+same fact, different   even if the fact sits at the end
+seat
+
+slot problem           neighbor problem</pre>
+
+    <p>Chroma (2025) ran 18 frontier models. All of them degrade as input grows. NIAH (exact string needle) lies. Semantic needles, distractors, and coherent haystacks all die faster. A shuffled incoherent haystack beat a coherent one on every model tested — narrative structure is extra noise, not extra signal.</p>
+
+    <h2>1. Position bias</h2>
+    <p>Start and end survive. Middle dies. 20–30pt drops are normal.</p>
+
+    <h3>Softmax budget</h3>
+    <pre>α_i = exp(q·k_i / √d) / Σ_j exp(q·k_j / √d)
+
+weights on one query sum to 1
+add tokens → denominator grows
+each relevant token shrinks
+SNR falls ~ 1/n when distractors look similar</pre>
+
+    <h3>Sink + recency + dead zone</h3>
+    <ul>
+      <li><strong>Attention sink / primacy.</strong> Softmax must dump mass somewhere. First tokens are always visible. They steal weight even when they carry nothing. Left arm of the U.</li>
+      <li><strong>Causal mask + RoPE recency.</strong> Later tokens see more of the sequence and sit closer in rotary space. Right arm of the U.</li>
+      <li><strong>Middle dead zone.</strong> Gets neither. Residual paths let the last token teleport. Early tokens compound through layers. Middle tokens take hybrid residual+mix paths and smear.</li>
+    </ul>
+
+    <p>Pretrain mixes “remember the whole passage” and “use the last thing said.” Those two retrieval demands produce primacy + recency. The U is the compromise.</p>
+
+    <h2>2. Length degradation</h2>
+    <p>Pin the fact at the end and quality still falls as <code>n</code> grows.</p>
+    <ul>
+      <li>more distractors that are semantically close to the answer</li>
+      <li>entropy of the attention distribution rises</li>
+      <li>last-token hidden state collapses toward indistinguishability</li>
+      <li>effective window ≪ advertised window</li>
+    </ul>
+    <pre>TASK                 WHEN IT DIES
+exact retrieve       late / almost never on frontier
+semantic retrieve    ~32K on most models
+multi-hop            16–50% of advertised
+reasoning            10–20% effective (BABILong)
+code bugfix          can collapse (29% @ 32K → 3% @ 256K
+                     on one LongCodeBench point)</pre>
+    <p>The “finish inside 50% of the window” rule is too simple. Onset tracks absolute tokens + task type, not a fixed fraction. RULER: many models keep only 16–50% of claimed length.</p>
+
+    <h2>3. Agent-specific toxins</h2>
+    <p>Transformer bias is the substrate. Long-running agents add four more.</p>
+    <ul>
+      <li><strong>Transcript debt.</strong> Every tool result stays. A coding session’s window is often ~96% file-read bodies. The first useful read is still <em>present</em> at turn 80 — buried. Prefill cost scales with the pile. Recall of that first read does not.</li>
+      <li><strong>Self-contradiction.</strong> Failed attempts, superseded plans, “don’t do X” then “actually do X” sit in one prompt. No pointer to current truth. A weighted soup. Later instructions fight earlier ones for the same softmax mass.</li>
+      <li><strong>State staleness.</strong> A task list injected at turn 1 is false by turn 40. The world moved. Context did not. The model treats the stale list as still true because it is still in-window.</li>
+      <li><strong>Compaction loss.</strong> Summarize-the-window fires when the window is longest and the model is already weakest. The one warning buried in a debug session is the first thing the summary drops. New window inherits a wrong abstract and treats it as canon.</li>
+    </ul>
+    <p>2026 long-horizon search named a fifth: <strong>premature termination</strong>. Under long context, models quit or emit an uncertain wrong answer <em>before</em> the window is full. Termination rate tracks context length even with difficulty held fixed. Rot does not only miss facts — it makes the agent stop exploring.</p>
+    <p>Memory-file drift (<code>MEMORY.md</code>, agent notes) makes rot persistent across sessions: over-summarize nuance away, keep the old preference after you changed it, load both lines. Now the soup survives the session boundary.</p>
+
+    <h2>What it looks like from outside</h2>
+    <pre>SYMPTOM                         MECHANISM
+ignores a rule stated at start  that rule slid into the middle
+contradicts itself 30 turns later both versions still in-window
+re-asks a solved question       earlier answer diluted / compacted out
+re-does finished work           no authoritative state; transcript looks open
+happy-path “done” then ships a hole  premature stop + no sensor
+hallucinates “as we discussed”  generating a reference it cannot use
+tool calls get sloppy           schemas + old results vs current goal</pre>
+    <p>Rot ≠ amnesia. The bits are there. The attention budget is not.</p>
+
+    <h2>Match the lever to the failure</h2>
+    <pre>position bias      invariants at head AND tail
+dilution           fewer tokens, not smarter retrieval of the same pile
+distractors        extract facts, drop dialogue
+                   contradiction must block the next step
+transcript debt    persist tool bodies to disk, leave a stub
+staleness          authoritative state files, not chat history
+compaction loss    compact tool results first
+                   never let an LLM summary be the only copy of a constraint
+premature stop     sensors / tests / “not done until X”
+                   do not trust the completion token
+session rot        fresh context per execution unit
+                   accumulated context only for synthesis</pre>
+
+    <h2>What this is not</h2>
+    <p>X is full of “Anthropic engineer built a memory engine that forgets 90%” posts. Same stencil, unnamed engineer, four ALL-CAPS components, fake 14-day / zero-drift metrics, quote-card pointing at an unrelated article. Steal the verbs (extract, collide, prune, evict). Do not steal the attribution.</p>
+    <p>What Anthropic actually shipped is boring and real: <code>MEMORY.md</code> with a 200-line cap, Auto Dream between sessions, compaction, skills that load ~2k tokens only on match. File-system memory. Not a 2,000-token invariant graph with a secret pruner.</p>
+    <p>The idea underneath those posts is still the right idea: context is debt. Keep invariants. Drop transcripts. Force a state clash to halt the next step. Write the surviving rule into the harness — tests, sensors, <code>AGENTS.md</code> — so the agent cannot make the same mistake twice.</p>
+
+    <h2>For this kernel</h2>
+    <p>Web Agent Machine already treats the tab as a bounded runtime: intent → plan → broker → act. Context rot is the reason that loop must not accumulate tool dumps in the same buffer that holds the goal.</p>
+    <pre>GOAL + CONSTRAINTS     hot, always in-window
+CURRENT STEP STATE     hot, file-backed, rewritten not appended
+TOOL BODIES            cold, disk / stub
+FAILED ATTEMPTS        cold, or one-line dead-end ledger
+SESSION TRANSCRIPT     not an archive</pre>
+    <p>If the kernel starts stuffing every FileAgent and BrowserAgent result back into the next plan prompt, it will recreate the same failure the cloud agents already have — only cheaper, and still wrong.</p>
+  </article>
+
+  <div class="panel">
+    <footer>
+      <a href="../blog.html">&larr; all notes</a> · MIT
+    </footer>
+  </div>
+
+</div>
+</body>
+</html>

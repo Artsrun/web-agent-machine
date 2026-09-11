@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mask">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scan-Line to Splat — Web Agent Machine</title>
+<meta name="description" content="Chronological line from Utah scan-line shading (1967) to WebGPU Gaussians. The object representations, the algorithms, and the calculus that still runs in the tab." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --etch: #2A3050;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --l-kernel: #4FD6C4; --l-intent: #F5A524; --l-store: #5FD68A;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --rail: 1px; --gap: 14px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+.shell { max-width: 720px; margin-inline: auto; padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); }
+.panel { background: var(--substrate); border: var(--rail) solid var(--etch); }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--l-kernel); }
+.rail a.back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.rail a.back:hover { color: var(--l-kernel); }
+article { padding: 28px 26px 34px; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 10px; }
+h1 { font-family: var(--font-display); font-size: 26px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -.01em; }
+.byline { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-bottom: 22px; }
+h2 { font-family: var(--font-display); font-size: 18px; margin: 28px 0 10px; color: var(--l-kernel); letter-spacing: .01em; }
+h3 { font-family: var(--font-display); font-size: 15px; margin: 20px 0 8px; color: var(--silk); }
+p { margin: 0 0 14px; color: #CFD4E8; }
+ul { margin: 0 0 14px; padding-left: 0; list-style: none; color: #CFD4E8; }
+li { margin-bottom: 9px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--wafer); border: 1px solid var(--etch); padding: 1px 6px; color: var(--l-kernel); }
+strong { color: var(--silk); font-weight: 600; }
+em { font-style: italic; color: var(--silk); }
+pre {
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.45;
+  background: var(--wafer); border: 1px solid var(--etch);
+  padding: 14px 16px; overflow-x: auto; color: #B8C0DC; margin: 0 0 16px;
+}
+footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--l-kernel); }
+.spine { position: relative; margin: 8px 0 22px; padding-left: 78px; }
+.spine::before {
+  content: ""; position: absolute; left: 58px; top: 6px; bottom: 6px;
+  width: 1px; background: var(--etch);
+}
+.tick { position: relative; margin: 0 0 16px; }
+.tick:last-child { margin-bottom: 0; }
+.yr {
+  position: absolute; left: -78px; top: 1px; width: 58px; text-align: right;
+  font-family: var(--font-mono); font-size: 11px; color: var(--l-intent);
+}
+.tick::before {
+  content: ""; position: absolute; left: -24px; top: 8px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--l-kernel); box-shadow: 0 0 0 3px var(--substrate);
+}
+.tick .what { color: var(--silk); font-weight: 600; }
+.tick .who { color: var(--dim); font-family: var(--font-mono); font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+.chips a {
+  font-family: var(--font-mono); font-size: 11px; color: var(--dim);
+  border: 1px solid var(--etch); padding: 4px 8px; text-decoration: none;
+}
+.chips a:hover { color: var(--l-kernel); border-color: var(--l-kernel); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="panel rail">
+    <a class="mark" href="../index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="../blog.html">&larr; notes</a>
+  </div>
+
+  <article class="panel">
+    <div class="eyebrow">Notes</div>
+    <h1>Scan-Line to Splat</h1>
+    <div class="byline">rev 0.1 · notes · ~8 min · 1967 → web GPU</div>
+
+    <p>A 3D object on a screen is never the object. It is a representation plus an algorithm that turns that representation into ordered fragments. The calculus does not change. The storage of the surface does.</p>
+
+    <p>This line starts at Utah scan-line shading in 1967 and ends in the tab: WebGL, WebGPU, ASCII projection, 3D/4D Gaussians. Same pipeline pressure the whole way — visibility, interpolation, light.</p>
+
+    <div class="chips">
+      <a href="#y1967">1967 scan</a>
+      <a href="#y1974">1974 z</a>
+      <a href="#y1980">1980 ray</a>
+      <a href="#y1986">1986 ∫</a>
+      <a href="#y1995">1995 web</a>
+      <a href="#y2011">2011 gl</a>
+      <a href="#y2023">2023 splat</a>
+    </div>
+
+    <div class="spine" id="line">
+      <div class="tick"><span class="yr">1963</span><span class="what">Sketchpad</span><div class="who">Sutherland · constraint geometry, not pixels</div></div>
+      <div class="tick"><span class="yr">1967</span><span class="what">Halftone perspective</span><div class="who">Wylie / Romney / Evans / Erdahl · Utah FJCC</div></div>
+      <div class="tick"><span class="yr">1970</span><span class="what">Watkins scan-line</span><div class="who">real-time visible surface per row</div></div>
+      <div class="tick"><span class="yr">1971</span><span class="what">Gouraud</span><div class="who">interpolate vertex irradiance across the span</div></div>
+      <div class="tick"><span class="yr">1974</span><span class="what">Z-buffer + texture</span><div class="who">Catmull · plus the ten hidden-surface paper</div></div>
+      <div class="tick"><span class="yr">1975</span><span class="what">Phong</span><div class="who">interpolate N, evaluate the lobe per pixel</div></div>
+      <div class="tick"><span class="yr">1980</span><span class="what">Whitted ray tracing</span><div class="who">recursion instead of a span</div></div>
+      <div class="tick"><span class="yr">1986</span><span class="what">Rendering equation</span><div class="who">Kajiya · the integral everything else approximates</div></div>
+      <div class="tick"><span class="yr">1992</span><span class="what">OpenGL 1.0</span><div class="who">the fixed pipeline becomes an API</div></div>
+      <div class="tick"><span class="yr">1995</span><span class="what">VRML</span><div class="who">first serious attempt to put a scene graph on the web</div></div>
+      <div class="tick"><span class="yr">2011</span><span class="what">WebGL 1.0</span><div class="who">Khronos · GPU in the browser, no plugin</div></div>
+      <div class="tick"><span class="yr">2023</span><span class="what">3D Gaussian Splatting</span><div class="who">Kerbl et al. · anisotropic blobs, not triangles</div></div>
+      <div class="tick"><span class="yr">2024</span><span class="what">4DGS</span><div class="who">deformation field vs native 4D covariance</div></div>
+    </div>
+
+    <h2 id="y1967">1967 — the scan-line object</h2>
+    <p>Wylie, Romney, Evans, and Erdahl, University of Utah, AFIPS Fall Joint Computer Conference: <em>Halftone Perspective Drawings by Computer</em>. Not a modern GPU. A shaded polygon projected in perspective and filled one horizontal row at a time.</p>
+    <p>Watkins (Utah PhD, 1970) makes the algorithm operational for real-time visible surface: keep an active-edge table, walk y, fill spans. Bouknight and others close the shading loop in the early 70s. “Scan-line rendering in 1967” is the Utah cluster, not a single trademarked routine.</p>
+
+    <h3>Object</h3>
+    <p>A polyhedron. Vertices in world space. Faces as ordered rings. No textures yet. No normals per vertex until Gouraud.</p>
+
+    <h3>Algorithm</h3>
+    <pre>project vertices  →  (x/z, y/z)
+bucket edges by y_min
+for y in [ymin .. ymax]:
+  insert / retire edges
+  sort active edges by x
+  pair them into spans [xL, xR]
+  for x in span:
+    write shade(x, y) if this face is front</pre>
+    <p>Visibility is solved <em>on the line</em>: depth at the span, or a list of fragment intervals. You never hold a full image-space z pyramid. Memory in 1967 cannot afford Catmull’s later buffer.</p>
+
+    <h3>Calculus</h3>
+    <pre>perspective
+  x_s = f · X / Z + c_x
+  y_s = f · Y / Z + c_y
+
+edge walk (DDA)
+  x(y+1) = x(y) + Δx/Δy
+
+attribute on a span  (affine, the 1967–71 default)
+  C(x) = (1-t) C_L + t C_R
+  t    = (x - x_L) / (x_R - x_L)
+
+perspective-correct form  (later, required for texture)
+  C =  [(1-t) C_L/Z_L + t C_R/Z_R]
+     / [(1-t)     1/Z_L + t     1/Z_R]
+
+why the divide:
+  linear interpolation in screen space ≠ linear in world space
+  1/Z is the quantity that *is* linear after the projective map</pre>
+    <p>That last identity is projective geometry, not a GPU trick. Homogeneous <code>[X Y Z W]</code> with <code>W = Z</code> after the camera transform is the same statement: divide after you interpolate.</p>
+
+    <h2 id="y1974">1971–75 — the shaded mesh</h2>
+    <p>Gouraud (1971): compute irradiance at vertices, interpolate the color across the scan. Cheap. Mach bands at silhouettes.</p>
+    <p>Phong (1975): interpolate the unit normal, renormalize, evaluate the lobe per pixel.</p>
+    <pre>I = k_a I_a
+  + k_d I_d max(N·L, 0)
+  + k_s I_s max(R·V, 0)^n
+
+R = 2 (N·L) N − L
+N, L, V unit</pre>
+    <p>Catmull 1974: z-buffer + texture mapping. Visibility leaves the edge table and becomes a per-pixel compare. Sutherland, Sproull, Schumacker the same year classify ten hidden-surface algorithms — scan-line is one family, image-precision z is another, list-priority (Newell painter) a third.</p>
+    <pre>z-buffer
+  if z_frag < zbuf[x,y]:
+    zbuf[x,y]  = z_frag
+    color[x,y] = shade(frag)</pre>
+    <p>Object is still a triangle mesh. The algorithm moved from “sort the world per row” to “test each fragment against a screen-sized memory.” That trade only becomes free once memory is cheap. On the web it is free. On a 1967 machine it was not.</p>
+
+    <h2 id="y1980">1980–86 — leave the raster</h2>
+    <p>Whitted 1980: the primary ray hits, then spawn reflection / refraction / shadow rays. The object is still triangles (or quadrics). The algorithm is a tree of intersections, not a span.</p>
+    <p>Kajiya 1986 writes the thing every later method is approximating:</p>
+    <pre>L_o(x, ω_o) = L_e(x, ω_o)
+  + ∫_Ω f_r(x, ω_i, ω_o) L_i(x, ω_i) (ω_i · n) dω_i</pre>
+    <p>That is a hemisphere integral. Scan-line Phong is a one-sample estimate of it (directional light + a fake specular lobe). Path tracing is Monte Carlo on the same integral. Radiosity discretizes the geometry and solves a linear system. Nothing after 1986 invents a new light transport law. It invents samplers.</p>
+
+    <h3>Other objects in the same decade</h3>
+    <ul>
+      <li><strong>Parametric patches</strong> — Bézier / B-spline / later NURBS. Object is a map <code>[0,1]² → R³</code>. Render by recursive subdivision until a patch is flat enough to be a polygon, or ray-patch invert.</li>
+      <li><strong>Implicits / voxels</strong> — Marching Cubes (Lorensen & Cline, 1987) turns a scalar field <code>f(x)=0</code> into triangles. The mesh is now a derived view of a volume.</li>
+      <li><strong>Points</strong> — already a research primitive; they come back as the web’s cheapest 3D (and as Gaussians).</li>
+    </ul>
+
+    <h2 id="y1995">1992–2009 — API, then the web’s first try</h2>
+    <pre>1992   OpenGL 1.0          fixed function: matrix stack + scan convert
+1993   Doom BSP            object-space partition, painter in 2.5D
+1996   Quake               software raster + PVS, then GLQuake
+1995   VRML                scene graph over HTTP. Plugin era.
+2001   programmable GPU    vertex + fragment replace the fixed stack
+2006   Canvas 3D experiments in browsers
+2011   WebGL 1.0           OpenGL ES 2.0 in the tab. No plugin.</pre>
+    <p>VRML failed as a product and succeeded as a warning: a web 3D object that needs a binary plugin is not a web object. WebGL wins because the rasterizer is already in the process.</p>
+
+    <h2 id="y2011">2011–17 — the web mesh</h2>
+    <p>Three.js (2010) wraps the raw GLES state machine so a page can hold a scene graph again without writing a driver. glTF later becomes the interchange mesh: attributes, accessors, PBR metallic-roughness.</p>
+    <pre>MVP chain  (column vectors, GL convention)
+  clip   = P · V · M · [x y z 1]ᵀ
+  ndc    = clip.xyz / clip.w
+  screen = 0.5 · (ndc.xy + 1) · viewport
+
+vertex shader   = the 1967 project step, now a program
+rasterizer      = the scan converter, now fixed silicon
+fragment shader = Phong / Cook-Torrance / PBR, per pixel</pre>
+    <p>Cook-Torrance / Disney / glTF PBR replace Phong’s <code>(R·V)^n</code> with a microfacet integral:</p>
+    <pre>f_r = k_d / π +  D F G  /  (4 (n·ω_i)(n·ω_o))
+
+D  GGX normal distribution
+F  Fresnel (Schlick)
+G  geometry / shadowing-masking</pre>
+    <p>Still Kajiya. Still one or two samples of the sun, plus an IBL integral baked into an irradiance cube and a prefiltered specular lod. The calculus hid in the mip chain: <code>dFdx / dFdy</code> pick the lod so the texture integral matches the pixel footprint — the same 1/Z correctness problem, now in filter space.</p>
+
+    <h3>Pedagogical object: the torus</h3>
+    <p>a1k0n’s 2011 donut is the scan-line idea stripped to projection + z-buffer + a luminance character. No GPU. Same math the Utah group used on paper.</p>
+    <pre>torus sample
+  x = (R2 + R1 cos θ) cos φ
+  y =  R1 sin θ
+  z = (R2 + R1 cos θ) sin φ
+then rotate by A (X), B (Z)
+
+ooz = 1 / (K2 + z)          // 1/Z again
+x'  = K1 · ooz · x
+y'  = K1 · ooz · y
+L   = N·light
+keep sample if ooz > zbuf[x',y']</pre>
+    <p>That is the training-wheels object for this repo: surface samples → project → visibility. Gaussian splats are the same sentence with a covariance instead of a character.</p>
+
+    <h2>2017–22 — WebGL 2, then WebGPU</h2>
+    <p>WebGL 2 (2017) is ES 3.0: VAOs, instancing, 3D textures, GLSL 300. Enough to ship a serious rasterizer. Not enough to write your own compute sort without hacks.</p>
+    <p>WebGPU is the second web graphics epoch. Compute shaders, explicit pipelines, WGSL. The scan converter is still there if you draw triangles. You can also skip it and splat.</p>
+
+    <h2 id="y2023">2020–26 — fields, then blobs</h2>
+    <p>NeRF (2020): the object is an MLP <code>F_θ(x, d) → (σ, c)</code>. The algorithm is quadrature along a ray — Kajiya with a learned density. Beautiful. Too heavy for a phone tab without distillation.</p>
+    <p>3D Gaussian Splatting (Kerbl, Kopanas, Leimkühler, Drettakis, 2023): the object is a bag of anisotropic 3D Gaussians.</p>
+    <pre>G(x) = exp( −½ (x − μ)ᵀ Σ⁻¹ (x − μ) )
+
+Σ = R S Sᵀ Rᵀ
+  S = diag(s_x, s_y, s_z)
+  R from a unit quaternion
+
+project to 2D covariance  (Zwicker EWA)
+  Σ' = J W Σ Wᵀ Jᵀ
+sort by depth, α-blend
+  C = Σ_i  c_i α_i  Π_{j<i} (1 − α_j)</pre>
+    <p>No triangle. No scan-line edge table. Visibility is a sort plus front-to-back compositing — Porter-Duff 1984, running on a million blobs. The derivative that trains the blob (position, scale, quat, SH color, opacity) is just reverse-mode on that project-and-blend.</p>
+
+    <p>4DGS splits in two families:</p>
+    <ul>
+      <li><strong>Deformation</strong> (Wu et al., 2024) — canonical 3D Gaussians + a HexPlane-style field that warps μ(t). Smaller to ship.</li>
+      <li><strong>Native 4D</strong> (Yang et al.) — μ and Σ live in (x,y,z,t). Condition on t to recover a 3D Gaussian. Heavier, more honest about motion covariance.</li>
+    </ul>
+    <pre>native 4D condition
+  μ_xyz|t  = μ_1:3 + Σ_1:3,4 Σ_4,4⁻¹ (t − μ_t)
+  Σ_xyz|t  = Σ_1:3,1:3 − Σ_1:3,4 Σ_4,4⁻¹ Σ_4,1:3</pre>
+    <p>That is a Gaussian conditional, not a graphics invention. Same linear-algebra move as a Kalman update.</p>
+
+    <h2>The object, restated</h2>
+    <pre>ERA            OBJECT                 VISIBILITY
+1967–70        polygon                scan-line / edge table
+1974           triangle + z           per-pixel compare
+1980           same + rays            intersection tree
+1987           implicit field         isosurface → triangles
+1995–2011      scene graph / glTF     GPU raster
+2020           neural field           ray quadrature
+2023           3D Gaussian            project, sort, blend
+2024           4D Gaussian            condition, then splat
+web now        any of the above       WebGL raster or WebGPU compute</pre>
+
+    <h2>What the calculus actually is</h2>
+    <ul>
+      <li><strong>Projective divide.</strong> <code>1/Z</code> is linear in screen space. Interpolate that, not the world attribute. 1967 already needed this. Texture mapping made it non-optional.</li>
+      <li><strong>Convex combination.</strong> A scan span, a barycentric triple, a mip footprint — all integrals of a function against a kernel supported on the pixel.</li>
+      <li><strong>Hemisphere integral.</strong> Kajiya. Every real-time shade is a 1-sample or pre-integrated stand-in.</li>
+      <li><strong>Chain rule.</strong> Vertex → clip → ndc → screen. Fragment → BRDF. Splat → 2D Σ → α → color. Training a Gaussian is autodiff through the 1967 projection.</li>
+      <li><strong>Conditioning.</strong> 4D → 3D Gaussians. Linear algebra, not a shader trick.</li>
+    </ul>
+
+    <h2>For this kernel</h2>
+    <p>Web Agent Machine already treats the tab as a bounded runtime. Graphics is another capability, not a CDN of screenshots.</p>
+    <pre>ASCII / canvas points    pedagogical object, zero GPU
+WebGL mesh + glTF        default web object, 2011 contract
+WebGPU compute splat     2023 object, sort + blend in-process
+4D deformation field     ship the small canonical set
+native 4D                only after prune + quantize</pre>
+    <p>Do not start at 4DGS. Start at the 1967 sentence: sample a surface, project by <code>1/Z</code>, keep the nearest, shade. The torus does that in a <code><pre></code>. The Gaussian does that with a covariance. The agent should know which object it is holding before it asks the GPU for a pipeline.</p>
+  </article>
+
+  <div class="panel">
+    <footer>
+      <a href="../blog.html">&larr; all notes</a> · MIT
+    </footer>
+  </div>
+
+</div>
+</body>
+</html>
