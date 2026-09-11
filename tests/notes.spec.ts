@@ -88,6 +88,8 @@ test.describe('Notes', () => {
 
     await page.locator('#btn-correct').click();
     await expect(page.locator('#attempts')).toHaveText('1');
+    await expect(page.locator('#mastery')).not.toHaveText('0.1000');
+    await expect(page.locator('#timeline li')).toHaveCount(1);
     await expect(page.locator('#step-math')).toContainText('P(correct)');
   });
 });

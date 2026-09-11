@@ -310,15 +310,17 @@ q('hitl-approve').onclick = async () => {
 };
 q('hitl-deny').onclick = async () => {
   const cap = pendingCap;
+  const args = pendingArgs;
   if (!cap) { hitlBar.classList.remove('open'); return; }
   await kernel.bus.emit({ type: 'error', payload: { code: 'HITL_DENIED', message: `Human denied capability: ${cap}`, recoverable: true, capability: cap } });
   pushBus('broker', 'deny', cap, 'policy');
   hitlBar.classList.remove('open');
   pendingCap = null;
+  pendingArgs = null;
   const rule = kernel.fallbacks.find((f) => f.from === cap);
   if (rule) {
     await kernel.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason || `${cap} denied → ${rule.to}`, recoverable: true, capability: cap, fallbackTo: rule.to } });
-    await kernel.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs({}) : {}, 1);
+    await kernel.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(args || {}) : {}, 1);
   }
 };
 
