@@ -91,5 +91,11 @@ test.describe('Notes', () => {
     await expect(page.locator('#mastery')).not.toHaveText('0.1000');
     await expect(page.locator('#timeline li')).toHaveCount(1);
     await expect(page.locator('#step-math')).toContainText('P(correct)');
+
+    await page.locator('#btn-reset').click();
+    await page.locator('#btn-incorrect').click();
+    await expect(page.locator('#attempts')).toHaveText('1');
+    await expect(page.locator('#timeline li')).toHaveCount(1);
+    await expect(page.locator('#timeline li').first()).toContainText('INCORRECT');
   });
 });

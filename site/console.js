@@ -156,7 +156,7 @@ class Kernel {
     this.modelRouter = new ModelRouter();
     this.workerBridge = new WorkerBridge();
     this.fallbacks = [
-      { from: 'browser.navigate', to: 'filesystem.write', mapArgs: () => ({ path: '/nav-fallback.txt', content: 'navigate was blocked — logged instead' }), reason: 'navigate denied/failed → log to file' },
+      { from: 'browser.navigate', to: 'filesystem.write', mapArgs: (args) => ({ path: '/nav-fallback.txt', content: `navigate blocked: ${(args && args.url) || '(no url provided)'}` }), reason: 'navigate denied/failed → log to file' },
       { from: 'browser.click', to: 'filesystem.write', mapArgs: (args) => ({ path: '/click-fallback.txt', content: `click blocked: ${JSON.stringify(args)}` }), reason: 'click denied/failed → log to file' },
     ];
   }
