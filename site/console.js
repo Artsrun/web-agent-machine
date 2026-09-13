@@ -156,7 +156,7 @@ class Kernel {
     this.modelRouter = new ModelRouter();
     this.workerBridge = new WorkerBridge();
     this.fallbacks = [
-      { from: 'browser.navigate', to: 'filesystem.write', mapArgs: () => ({ path: '/nav-fallback.txt', content: 'navigate was blocked — logged instead' }), reason: 'navigate denied/failed → log to file' },
+      { from: 'browser.navigate', to: 'filesystem.write', mapArgs: (args) => ({ path: '/nav-fallback.txt', content: `navigate blocked: ${(args && args.url) || '(no url provided)'}` }), reason: 'navigate denied/failed → log to file' },
       { from: 'browser.click', to: 'filesystem.write', mapArgs: (args) => ({ path: '/click-fallback.txt', content: `click blocked: ${JSON.stringify(args)}` }), reason: 'click denied/failed → log to file' },
     ];
   }
@@ -224,6 +224,10 @@ const pushBus = (src, ev, msg, layer = 'kernel') => {
   li.append(time, b, em, span);
   bus.prepend(li);
   while (bus.children.length > 40) bus.lastElementChild.remove();
+};
+const quickChips = Array.from(document.querySelectorAll('.chip'));
+const setQuickChipsDisabled = (disabled) => {
+  quickChips.forEach((chip) => { chip.disabled = disabled; });
 };
 
 const showResult = (label, body, meta = '') => {
@@ -310,24 +314,35 @@ q('hitl-approve').onclick = async () => {
 };
 q('hitl-deny').onclick = async () => {
   const cap = pendingCap;
+  const args = pendingArgs;
   if (!cap) { hitlBar.classList.remove('open'); return; }
   await kernel.bus.emit({ type: 'error', payload: { code: 'HITL_DENIED', message: `Human denied capability: ${cap}`, recoverable: true, capability: cap } });
   pushBus('broker', 'deny', cap, 'policy');
   hitlBar.classList.remove('open');
   pendingCap = null;
+  pendingArgs = null;
   const rule = kernel.fallbacks.find((f) => f.from === cap);
   if (rule) {
     await kernel.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason || `${cap} denied → ${rule.to}`, recoverable: true, capability: cap, fallbackTo: rule.to } });
-    await kernel.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs({}) : {}, 1);
+    await kernel.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(args || {}) : {}, 1);
   }
 };
 
 const runIntent = async (text) => {
+  if (runIntent.active) return;
   const input = q('cmd-input');
+  runIntent.active = true;
   input.disabled = true;
+  setQuickChipsDisabled(true);
   try { await kernel.handleIntent(text); }
-  finally { input.disabled = false; input.focus(); }
+  finally {
+    setQuickChipsDisabled(false);
+    input.disabled = false;
+    input.focus();
+    runIntent.active = false;
+  }
 };
+runIntent.active = false;
 
 q('cmd').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -338,11 +353,11 @@ q('cmd').addEventListener('submit', async (e) => {
   await runIntent(text);
 });
 
-document.querySelectorAll('.chip').forEach((btn) => {
-  btn.addEventListener('click', () => {
+quickChips.forEach((btn) => {
+  btn.addEventListener('click', async () => {
     const text = btn.dataset.cmd;
     q('cmd-input').value = '';
-    runIntent(text);
+    await runIntent(text);
   });
 });
 
