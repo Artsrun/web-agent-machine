@@ -1,238 +1,208 @@
-const LAYERS = { intent: { color: 'var(--l-intent)' }, kernel: { color: 'var(--l-kernel)' }, policy: { color: 'var(--l-policy)' }, conc: { color: 'var(--l-conc)' }, wasm: { color: 'var(--l-wasm)' }, store: { color: 'var(--l-store)' }, gfx: { color: 'var(--l-gfx)' } };
+/* Web Agent Machine — console UI.
+   Owns the DOM only. All machine behaviour lives in kernel.js.
+
+   Desktop and mobile are treated as two instruments, not one layout at
+   two widths: `view` drives which controls exist and how running an
+   intent behaves, on top of the CSS that decides what is on screen. */
+
+import { Kernel, FileAgent, BrowserAgent, CAPABILITIES, LAYERS } from './kernel.js';
+import { GROUPS, SAMPLES, GRAMMAR, TIERS, WALKTHROUGH, MAP } from './samples.js';
+
 const q = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+};
 
-class EventBus {
-  constructor() { this.handlers = new Map(); this.all = new Set(); }
-  on(type, h) {
-    if (type === '*') { this.all.add(h); return () => this.all.delete(h); }
-    if (!this.handlers.has(type)) this.handlers.set(type, new Set());
-    this.handlers.get(type).add(h);
-    return () => this.handlers.get(type)?.delete(h);
-  }
-  async emit(ev) {
-    const tasks = [];
-    for (const h of this.handlers.get(ev.type) || []) tasks.push(Promise.resolve(h(ev)));
-    for (const h of this.all) tasks.push(Promise.resolve(h(ev)));
-    await Promise.all(tasks);
-  }
-}
-
-class CapabilityBroker {
-  constructor() {
-    this.registry = new Map([
-      ['filesystem.read', { risk: 'low' }],
-      ['filesystem.list', { risk: 'low' }],
-      ['filesystem.write', { risk: 'medium' }],
-      ['browser.navigate', { risk: 'high', requiresHITL: true }],
-      ['browser.click', { risk: 'high', requiresHITL: true }],
-    ]);
-    this.grants = new Map();
-    this.handlers = new Map();
-    this.approved = new Map();
-  }
-  handle(cap, fn) { this.handlers.set(cap, fn); }
-  grant(g) { const list = this.grants.get(g.principal) || []; list.push(g); this.grants.set(g.principal, list); }
-  approve(principal, cap) {
-    if (!this.approved.has(principal)) this.approved.set(principal, new Set());
-    this.approved.get(principal).add(cap);
-  }
-  async request(req) {
-    const def = this.registry.get(req.capability);
-    if (!def) return { ok: false, error: 'unknown capability' };
-    const has = (this.grants.get(req.principal) || []).some(g => g.capability === req.capability);
-    if (!has) return { ok: false, error: 'no grant', requiresHITL: def.risk === 'high' };
-    const needs = def.risk === 'high' || def.requiresHITL;
-    const okHITL = this.approved.get(req.principal)?.has(req.capability);
-    if (needs && !okHITL) return { ok: false, error: 'HITL required', requiresHITL: true };
-    if (okHITL) this.approved.get(req.principal).delete(req.capability);
-    const h = this.handlers.get(req.capability);
-    return h ? h(req) : { ok: true, result: { echoed: req.args } };
-  }
-}
-
-class FileAgent {
-  constructor(seed = {}) { this.store = new Map(Object.entries(seed)); }
-  handlers = {
-    'filesystem.read': async (req) => {
-      const path = req.args?.path || '/';
-      if (!this.store.has(path)) return { ok: false, error: 'ENOENT' };
-      return { ok: true, result: this.store.get(path) };
-    },
-    'filesystem.list': async () => ({ ok: true, result: [...this.store.keys()] }),
-    'filesystem.write': async (req) => {
-      const { path, content } = req.args || {};
-      if (!path) return { ok: false, error: 'path required' };
-      this.store.set(path, content ?? '');
-      return { ok: true, result: { written: path } };
-    },
-  };
-}
-
-class BrowserAgent {
-  constructor() { this.url = 'about:blank'; this.history = []; }
-  handlers = {
-    'browser.navigate': async (req) => {
-      const url = req.args?.url;
-      if (!url) return { ok: false, error: 'url required' };
-      this.url = url;
-      this.history.push({ action: 'navigate', url });
-      return { ok: true, result: { navigated: true, url } };
-    },
-    'browser.click': async (req) => {
-      const sel = req.args?.selector;
-      if (!sel) return { ok: false, error: 'selector required' };
-      this.history.push({ action: 'click', selector: sel });
-      return { ok: true, result: { clicked: sel } };
-    },
-  };
-}
-
-function plan(text) {
-  const lower = text.toLowerCase();
-  const id = () => crypto.randomUUID();
-  if (/write|save|create/.test(lower) && /file/.test(lower)) {
-    return [{ id: id(), description: 'Write file', capability: 'filesystem.write', args: { path: '/notes.txt', content: 'hello from agent' } }];
-  }
-  if (/list|ls|dir/.test(lower)) {
-    return [{ id: id(), description: 'List directory', capability: 'filesystem.list', args: { path: '/' } }];
-  }
-  if (/read|open|show|cat/.test(lower) && /file|notes/.test(lower)) {
-    return [{ id: id(), description: 'Read file', capability: 'filesystem.read', args: { path: '/notes.txt' } }];
-  }
-  if (/navigate|go to|open url|browse/.test(lower)) {
-    return [{ id: id(), description: 'Navigate browser', capability: 'browser.navigate', args: { url: 'https://example.com' } }];
-  }
-  return [{ id: id(), description: 'Acknowledge intent (no tool)' }];
-}
-
-class ModelRouter {
-  static TIER_9B = /\b(architect(?:ure|ing|ural)?|design(?:s|ing)? a system|orchestrat(?:e|es|ing|ion)|multi[- ]agent|system design|end-?to-?end design)\b/i;
-  static TIER_8B = /\b(refactor(?:s|ing|ed)?|plan(?:s|ning|ned)?|analy(?:ze|se|zing|sing|sis)|multi-?step|migrat(?:e|es|ing|ion)|optimi[sz]e(?:s|d|ing)?|debug(?:s|ging|ged)?|investigat(?:e|es|ing|ion)|compare|summari[sz]e)\b/i;
-  route(text) {
-    if (ModelRouter.TIER_9B.test(text)) return '9b';
-    if (ModelRouter.TIER_8B.test(text)) return '8b';
-    return '6b';
-  }
-}
-
-class WorkerBridge {
-  constructor() {
-    const workerSrc = `
-      function plan(text) {
-        const lower = text.toLowerCase(); const id = () => crypto.randomUUID();
-        if (/write|save|create/.test(lower) && /file/.test(lower)) return [{ id: id(), description: 'Write file', capability: 'filesystem.write', args: { path: '/notes.txt', content: 'hello from agent' } }];
-        if (/list|ls|dir/.test(lower)) return [{ id: id(), description: 'List directory', capability: 'filesystem.list', args: { path: '/' } }];
-        if (/read|open|show|cat/.test(lower) && /file|notes/.test(lower)) return [{ id: id(), description: 'Read file', capability: 'filesystem.read', args: { path: '/notes.txt' } }];
-        if (/navigate|go to|open url|browse/.test(lower)) return [{ id: id(), description: 'Navigate browser', capability: 'browser.navigate', args: { url: 'https://example.com' } }];
-        return [{ id: id(), description: 'Acknowledge intent (no tool)' }];
-      }
-      self.onmessage = (e) => {
-        const { id, text } = e.data;
-        self.postMessage({ id, steps: plan(text) });
-      };
-    `;
-    this.worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' })));
-    this.pending = new Map();
-    this.worker.onmessage = (e) => {
-      const { id, steps } = e.data;
-      this.pending.get(id)?.(steps);
-      this.pending.delete(id);
-    };
-  }
-  offloadPlan(text) {
-    return new Promise((resolve) => {
-      const id = crypto.randomUUID();
-      this.pending.set(id, resolve);
-      this.worker.postMessage({ id, text });
-    });
-  }
-}
-
-class Kernel {
-  constructor() {
-    this.bus = new EventBus();
-    this.broker = new CapabilityBroker();
-    this.principal = 'desktop-agent';
-    this.modelRouter = new ModelRouter();
-    this.workerBridge = new WorkerBridge();
-    this.fallbacks = [
-      { from: 'browser.navigate', to: 'filesystem.write', mapArgs: (args) => ({ path: '/nav-fallback.txt', content: `navigate blocked: ${(args && args.url) || '(no url provided)'}` }), reason: 'navigate denied/failed → log to file' },
-      { from: 'browser.click', to: 'filesystem.write', mapArgs: (args) => ({ path: '/click-fallback.txt', content: `click blocked: ${JSON.stringify(args)}` }), reason: 'click denied/failed → log to file' },
-    ];
-  }
-  grant(cap) { this.broker.grant({ capability: cap, principal: this.principal }); }
-  approve(cap) { this.broker.approve(this.principal, cap); }
-  registerAgent(handlers) { for (const [cap, fn] of Object.entries(handlers)) this.broker.handle(cap, fn); }
-  async handleIntent(text) {
-    const intent = { id: crypto.randomUUID(), text, timestamp: Date.now() };
-    await this.bus.emit({ type: 'intent', payload: intent });
-    const model = this.modelRouter.route(text);
-    const steps = await this.workerBridge.offloadPlan(text);
-    const planObj = { id: crypto.randomUUID(), intentId: intent.id, steps, model };
-    await this.bus.emit({ type: 'plan', payload: planObj });
-    for (const step of steps) {
-      if (!step.capability) continue;
-      const stopped = await this.executeWithFallback(step.capability, step.args || {});
-      if (stopped) break;
-    }
-    return { intent, plan: planObj, model };
-  }
-  async executeWithFallback(capability, args, depth = 0) {
-    if (depth > 2) return true;
-    const callId = crypto.randomUUID();
-    await this.bus.emit({ type: 'tool_call', payload: { id: callId, capability, args, principal: this.principal } });
-    const result = await this.broker.request({ requestId: callId, capability, args, principal: this.principal });
-    await this.bus.emit({ type: 'tool_result', payload: { callId, ok: result.ok, result: result.ok ? result.result : undefined, error: result.ok ? undefined : result.error } });
-    if (result.ok) return false;
-    if (result.requiresHITL) {
-      await this.bus.emit({ type: 'error', payload: { code: 'HITL_REQUIRED', message: `Human approval needed for ${capability}`, recoverable: true, capability, args } });
-      return true;
-    }
-    const rule = this.fallbacks.find((f) => f.from === capability);
-    if (rule) {
-      await this.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason || `${capability} → ${rule.to}`, recoverable: true, capability, fallbackTo: rule.to } });
-      return this.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(args) : args, depth + 1);
-    }
-    await this.bus.emit({ type: 'error', payload: { code: 'TOOL_FAILED', message: result.error || `${capability} failed`, recoverable: false, capability } });
-    return false;
-  }
-}
-
-const files = new FileAgent({ '/readme.md': '# Web Agent Machine' });
+/* ── machine ──────────────────────────────────────────────── */
+const files = new FileAgent({ '/readme.md': '# Web Agent Machine\nA capability-secured agent kernel, in a tab.' });
 const browser = new BrowserAgent();
 const kernel = new Kernel();
 kernel.registerAgent(files.handlers);
 kernel.registerAgent(browser.handlers);
-kernel.grant('filesystem.read');
-kernel.grant('filesystem.list');
-kernel.grant('filesystem.write');
-kernel.grant('browser.navigate');
-kernel.grant('browser.click');
+CAPABILITIES.forEach((c) => kernel.grant(c.id));
 
-const bus = q('bus');
+/* ── view mode ────────────────────────────────────────────── */
+const desktop = matchMedia('(min-width: 900px)');
+let view = 'mobile';
+const applyView = () => {
+  view = desktop.matches ? 'desktop' : 'mobile';
+  document.body.dataset.view = view;
+  // On desktop every pane is on screen, so "the active tab" is meaningless.
+  if (view === 'desktop') clearUnread();
+};
+desktop.addEventListener('change', applyView);
+
+/* ── mobile tabs ──────────────────────────────────────────── */
+const tabbar = q('tabbar');
+const tabButtons = [...tabbar.querySelectorAll('button')];
+const setTab = (name) => {
+  document.body.dataset.tab = name;
+  tabButtons.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  if (name === 'bus') clearUnread();
+};
+const clearUnread = () => tabbar.querySelector('[data-tab="bus"]').dataset.unread = 'false';
+const markUnread = () => {
+  if (view === 'mobile' && document.body.dataset.tab !== 'bus') {
+    tabbar.querySelector('[data-tab="bus"]').dataset.unread = 'true';
+  }
+};
+tabbar.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (btn) setTab(btn.dataset.tab);
+});
+
+/* ── static renders ───────────────────────────────────────── */
+const fillSamples = () => {
+  const host = q('samples');
+  host.replaceChildren();
+  for (const g of GROUPS) {
+    const rows = SAMPLES.filter((s) => s.group === g.id);
+    if (!rows.length) continue;
+    const wrap = el('div', 'group');
+    const hd = el('div', 'group-hd');
+    hd.append(el('b', null, g.label), el('i', null, g.note));
+    const list = el('div', 'samples');
+    for (const s of rows) {
+      const b = el('button', 'sample');
+      b.type = 'button';
+      b.dataset.cmd = s.intent;
+      b.append(el('span', 's-cmd', s.intent), el('span', 's-tier', s.tier), el('span', 's-does', s.does));
+      list.append(b);
+    }
+    wrap.append(hd, list);
+    host.append(wrap);
+  }
+};
+
+/* The phone gets one thumb-height row of the most useful intents,
+   always within reach — not a grid that vanishes after the first run. */
+const RAIL = ['list files', 'write a file', 'read /readme.md', 'navigate to example.com', 'click #submit', 'read /does-not-exist.md'];
+const fillRail = () => {
+  const rail = q('rail');
+  rail.replaceChildren();
+  for (const intent of RAIL) {
+    const b = el('button', 'chip', intent);
+    b.type = 'button';
+    b.dataset.cmd = intent;
+    rail.append(b);
+  }
+};
+
+const fillWalkthrough = () => {
+  const host = q('walkthrough');
+  host.replaceChildren();
+  for (const s of WALKTHROUGH) {
+    const li = el('li');
+    const body = el('div');
+    body.append(el('b', null, s.title), el('p', null, s.watch));
+    if (s.intent) {
+      const b = el('button', 'run-step', `run: ${s.intent}`);
+      b.type = 'button';
+      b.dataset.cmd = s.intent;
+      body.append(b);
+    }
+    li.append(el('span', 'n', String(s.n)), body);
+    host.append(li);
+  }
+};
+
+const fillTable = (id, rows) => {
+  const body = q(id).querySelector('tbody');
+  body.replaceChildren();
+  for (const cells of rows) {
+    const tr = el('tr');
+    cells.forEach((c) => tr.append(el('td', null, c)));
+    body.append(tr);
+  }
+};
+
+const fillCaps = () => {
+  const host = q('caps');
+  host.replaceChildren();
+  for (const c of CAPABILITIES) {
+    const row = el('div');
+    // colour alone does not say why write is amber — name the risk next to the state
+    row.append(el('span', null, c.id), el('b', c.risk, `${c.risk} · ${c.risk === 'high' ? 'asks you' : 'granted'}`));
+    row.title = c.blurb;
+    host.append(row);
+  }
+};
+
+const fillMap = () => {
+  const host = q('map');
+  host.replaceChildren();
+  for (const n of MAP) {
+    const node = el('div', 'node');
+    node.id = `map-${n.id}`;
+    node.dataset.live = 'false';
+    node.style.setProperty('--c', LAYERS[n.layer].color);
+    node.append(el('b', null, n.title), el('i', null, n.sub), el('p', null, n.role));
+    host.append(node);
+  }
+};
+
+const mapTimers = new Map();
+const lightMap = (type) => {
+  for (const n of MAP) {
+    if (!n.events.includes(type)) continue;
+    const node = q(`map-${n.id}`);
+    if (!node) continue;
+    node.dataset.live = 'true';
+    clearTimeout(mapTimers.get(n.id));
+    mapTimers.set(n.id, setTimeout(() => { node.dataset.live = 'false'; }, 1400));
+  }
+};
+
+/* ── event bus log ────────────────────────────────────────── */
+const busEl = q('bus');
 const stamp = () => {
   const t = new Date();
-  return t.toTimeString().slice(0, 8) + '.' + String(t.getMilliseconds()).padStart(3, '0');
+  return `${t.toTimeString().slice(0, 8)}.${String(t.getMilliseconds()).padStart(3, '0')}`;
 };
 const pushBus = (src, ev, msg, layer = 'kernel') => {
-  const li = document.createElement('li');
+  const li = el('li');
   li.style.setProperty('--c', LAYERS[layer]?.color || 'var(--l-kernel)');
-  const time = document.createElement('time'); time.textContent = stamp();
-  const b = document.createElement('b'); b.textContent = src;
-  const em = document.createElement('em'); em.textContent = ev;
-  const span = document.createElement('span'); span.textContent = msg;
-  li.append(time, b, em, span);
-  bus.prepend(li);
-  while (bus.children.length > 40) bus.lastElementChild.remove();
-};
-const quickChips = Array.from(document.querySelectorAll('.chip'));
-const setQuickChipsDisabled = (disabled) => {
-  quickChips.forEach((chip) => { chip.disabled = disabled; });
+  li.append(el('time', null, stamp()), el('b', null, src), el('em', null, ev), el('span', null, String(msg ?? '')));
+  busEl.prepend(li);
+  while (busEl.children.length > 60) busEl.lastElementChild.remove();
+  markUnread();
 };
 
-const showResult = (label, body, meta = '') => {
-  q('empty').style.display = 'none';
+/* ── pipeline strip ───────────────────────────────────────── */
+const PIPE = [
+  ['intent', 'intent', 'var(--l-intent)'],
+  ['route', 'route', 'var(--l-conc)'],
+  ['plan', 'plan', 'var(--l-kernel)'],
+  ['broker', 'broker', 'var(--l-policy)'],
+  ['agent', 'agent', 'var(--l-wasm)'],
+];
+const resetPipeline = () => {
+  const host = q('pipeline');
+  host.replaceChildren();
+  PIPE.forEach(([key, label, color], i) => {
+    if (i) host.append(el('span', 'arrow', '→'));
+    const s = el('span', 'stage', label);
+    s.id = `st-${key}`;
+    s.dataset.on = 'false';
+    s.style.setProperty('--c', color);
+    host.append(s);
+  });
+};
+const setStage = (key, label, state = 'true') => {
+  const s = q(`st-${key}`);
+  if (!s) return;
+  s.dataset.on = state;
+  if (label) s.textContent = label;
+};
+
+/* ── result panel ─────────────────────────────────────────── */
+const showResult = (label, body, meta = '', tone = 'ok') => {
+  q('welcome').classList.add('hide');
   q('out').classList.add('show');
+  q('out-badge').dataset.tone = tone;
   q('out-label').textContent = label;
   q('out-meta').textContent = meta;
   q('out-body').textContent = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
@@ -241,108 +211,180 @@ const showResult = (label, body, meta = '') => {
 const renderDisk = () => {
   const ul = q('files');
   ul.replaceChildren();
+  q('disk-count').textContent = `(${files.store.size})`;
+  if (!files.store.size) {
+    ul.append(el('li', 'none', 'empty'));
+    return;
+  }
   for (const [path, content] of files.store) {
-    const li = document.createElement('li');
-    const name = document.createElement('span');
-    name.textContent = path;
-    const size = document.createElement('em');
-    size.textContent = `${String(content).length}b`;
-    li.append(name, size);
-    li.onclick = () => {
-      showResult('filesystem.read', String(content), path);
-      q('cmd-input').value = `read ${path}`;
+    const li = el('li');
+    const b = el('button');
+    b.type = 'button';
+    b.append(el('span', null, path), el('em', null, `${String(content).length}b`));
+    b.onclick = () => {
+      showResult('filesystem.read', String(content), `${path} · read from the disk panel, no kernel round-trip`);
+      if (view === 'mobile') setTab('run');
     };
+    li.append(b);
     ul.append(li);
   }
 };
 
+/* ── kernel → UI ──────────────────────────────────────────── */
 kernel.bus.on('*', (e) => {
+  lightMap(e.type);
   switch (e.type) {
     case 'intent':
-      pushBus('kernel', 'intent', e.payload.text.slice(0, 48), 'kernel');
+      pushBus('kernel', 'intent', e.payload.text.slice(0, 64), 'intent');
+      setStage('intent', 'intent');
       break;
-    case 'plan':
-      pushBus('kernel', 'plan', `[${e.payload.model}] ` + e.payload.steps.map(s => s.description).join(' → '), 'kernel');
-      q('out-meta').textContent = `model ${e.payload.model} · ${e.payload.steps.map(s => s.description).join(' → ')}`;
+    case 'route':
+      pushBus('router', 'route', `tier ${e.payload.model}`, 'router');
+      setStage('route', e.payload.model);
+      break;
+    case 'plan': {
+      const desc = e.payload.steps.map((s) => s.description).join(' → ');
+      pushBus('worker', 'plan', desc, 'kernel');
+      setStage('plan', e.payload.steps.length > 1 ? `plan ×${e.payload.steps.length}` : 'plan');
+      q('out-meta').textContent = desc;
+      break;
+    }
+    case 'noop':
+      pushBus('kernel', 'noop', 'no capability matched', 'kernel');
+      setStage('broker', 'skipped', 'false');
+      showResult('no tool matched', `The planner found no capability for:\n\n  "${e.payload.text}"\n\nIt declines rather than inventing one. See "What the planner matches" in the guide.`, 'nothing executed', 'wait');
+      showTip({ noop: true });
       break;
     case 'tool_call':
-      pushBus('mesh', 'tool_call', e.payload.capability, 'intent');
+      pushBus('kernel', 'tool_call', e.payload.capability, 'kernel');
+      setStage('agent', e.payload.capability.split('.')[0]);
       break;
     case 'tool_result':
-      pushBus('broker', e.payload.ok ? 'grant' : 'deny', e.payload.ok ? JSON.stringify(e.payload.result).slice(0, 40) : e.payload.error, 'policy');
+      pushBus('broker', e.payload.ok ? 'grant' : 'deny',
+        e.payload.ok ? JSON.stringify(e.payload.result).slice(0, 56) : e.payload.error, 'policy');
       if (e.payload.ok) {
-        showResult('ok', e.payload.result);
+        setStage('broker', 'granted');
+        showResult(e.payload.capability, e.payload.result, `${e.payload.capability} · ok`);
         renderDisk();
+      } else {
+        setStage('broker', 'denied', 'fail');
       }
+      showTip({ cap: e.payload.capability, ok: e.payload.ok, path: e.payload.args?.path, intent: lastIntent });
       break;
     case 'error':
       if (e.payload.code === 'HITL_REQUIRED') {
         pushBus('broker', 'HITL', e.payload.message, 'policy');
-        showHITL(e.payload.capability, e.payload.args);
-        showResult('waiting for you', e.payload.message + '\n\nApprove in the red bar below.');
+        setStage('broker', 'awaiting you', 'fail');
+        openHITL(e.payload.capability, e.payload.args);
+        showResult('waiting for you', `${e.payload.capability} is marked high risk, so the broker stopped here.\n\nApprove or deny below. Nothing runs until you decide.`, 'execution paused', 'wait');
+        showTip({ hitl: true });
       } else if (e.payload.code === 'HITL_DENIED') {
         pushBus('broker', 'denied', e.payload.message, 'policy');
       } else if (e.payload.code === 'FALLBACK') {
-        pushBus('broker', 'fallback', e.payload.message, 'policy');
+        pushBus('kernel', 'fallback', e.payload.message, 'kernel');
+        setStage('agent', `→ ${e.payload.fallbackTo.split('.')[0]}`);
       } else {
         pushBus('broker', 'error', e.payload.message || e.payload.code, 'policy');
-        showResult('error', e.payload.message || e.payload.code);
+        setStage('broker', 'failed', 'fail');
+        // TOOL_FAILED always trails a failed tool_result, which already set the
+        // tip from the call's own args. Re-tipping here would lose the path.
+        showResult('error', e.payload.message || e.payload.code, e.payload.capability || '', 'fail');
       }
       break;
   }
 });
 
-let pendingCap = null;
-let pendingArgs = null;
-const hitlBar = q('hitl');
-function showHITL(cap, args) {
-  pendingCap = cap;
-  pendingArgs = args || {};
-  q('hitl-cap').textContent = cap || '';
-  hitlBar.classList.add('open');
-}
-q('hitl-approve').onclick = async () => {
-  if (!pendingCap) return;
-  const cap = pendingCap;
-  const args = pendingArgs;
-  kernel.approve(cap);
-  pushBus('broker', 'approve', cap, 'policy');
-  hitlBar.classList.remove('open');
-  pendingCap = null;
-  pendingArgs = null;
-  await kernel.executeWithFallback(cap, args);
-};
-q('hitl-deny').onclick = async () => {
-  const cap = pendingCap;
-  const args = pendingArgs;
-  if (!cap) { hitlBar.classList.remove('open'); return; }
-  await kernel.bus.emit({ type: 'error', payload: { code: 'HITL_DENIED', message: `Human denied capability: ${cap}`, recoverable: true, capability: cap } });
-  pushBus('broker', 'deny', cap, 'policy');
-  hitlBar.classList.remove('open');
-  pendingCap = null;
-  pendingArgs = null;
-  const rule = kernel.fallbacks.find((f) => f.from === cap);
-  if (rule) {
-    await kernel.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason || `${cap} denied → ${rule.to}`, recoverable: true, capability: cap, fallbackTo: rule.to } });
-    await kernel.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(args || {}) : {}, 1);
+/* What to try next, chosen from what just happened. The single most
+   useful hint is the one that arrives after you already did something. */
+const TIPS = [
+  { when: (r) => r.hitl, text: 'Deny it instead and watch the kernel fall back rather than give up.', run: null },
+  { when: (r) => r.cap === 'filesystem.write', text: 'Read it back:', run: (r) => `read ${r.path}` },
+  { when: (r) => r.cap === 'filesystem.list', text: 'Now try one the broker will stop:', run: () => 'navigate to example.com' },
+  { when: (r) => r.cap === 'filesystem.read' && r.ok, text: 'Overwrite it:', run: (r) => `write ${r.path} "second draft"` },
+  { when: (r) => r.cap === 'filesystem.read' && !r.ok, text: 'It does not exist yet — create it:', run: (r) => `write ${r.path} "now it does"` },
+  { when: (r) => r.cap?.startsWith('browser.') && r.ok, text: 'The approval was spent on use. Run it again and it asks again:', run: (r) => r.intent },
+  { when: (r) => r.noop, text: 'The planner only matches a few verbs. Try:', run: () => 'list files' },
+];
+const showTip = (ctx) => {
+  const hit = TIPS.find((t) => t.when(ctx));
+  const tip = q('tip');
+  tip.replaceChildren();
+  if (!hit) { tip.hidden = true; return; }
+  tip.hidden = false;
+  tip.append(document.createTextNode(hit.text));
+  const cmd = hit.run?.(ctx);
+  if (cmd) {
+    const b = el('button', null, cmd);
+    b.type = 'button';
+    b.dataset.cmd = cmd;
+    tip.append(b);
   }
 };
 
-const runIntent = async (text) => {
-  if (runIntent.active) return;
-  const input = q('cmd-input');
-  runIntent.active = true;
-  input.disabled = true;
-  setQuickChipsDisabled(true);
-  try { await kernel.handleIntent(text); }
-  finally {
-    setQuickChipsDisabled(false);
-    input.disabled = false;
-    input.focus();
-    runIntent.active = false;
+/* ── HITL ─────────────────────────────────────────────────── */
+let pending = null;
+const hitl = q('hitl');
+const openHITL = (cap, args) => {
+  pending = { cap, args: args || {} };
+  q('hitl-cap').textContent = `${cap} ${JSON.stringify(args || {})}`;
+  q('hitl-why').textContent = 'High-risk capabilities are never granted standing. Approving spends a single use — the next call asks again.';
+  hitl.classList.add('open');
+  if (view === 'mobile') {
+    setTab('run');
+    hitl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  q('hitl-approve').focus();
+};
+const closeHITL = () => { hitl.classList.remove('open'); const p = pending; pending = null; return p; };
+
+q('hitl-approve').onclick = async () => {
+  const p = closeHITL();
+  if (!p) return;
+  kernel.approve(p.cap);
+  pushBus('you', 'approve', p.cap, 'policy');
+  await kernel.executeWithFallback(p.cap, p.args);
+};
+q('hitl-deny').onclick = async () => {
+  const p = closeHITL();
+  if (!p) return;
+  await kernel.bus.emit({ type: 'error', payload: { code: 'HITL_DENIED', message: `you denied ${p.cap}`, recoverable: true, capability: p.cap } });
+  const rule = kernel.fallbacks.find((f) => f.from === p.cap);
+  if (rule) {
+    await kernel.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason, recoverable: true, capability: p.cap, fallbackTo: rule.to } });
+    await kernel.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(p.args) : {}, 1);
   }
 };
-runIntent.active = false;
+
+/* ── running ──────────────────────────────────────────────── */
+const history = [];
+let histIndex = -1;
+let lastIntent = null;
+let running = false;
+
+const setBusy = (on) => {
+  running = on;
+  q('cmd-input').disabled = on;
+  q('cmd-send').disabled = on;
+  q('cmd-send').textContent = on ? '···' : 'SEND';
+  document.querySelectorAll('.chip, .sample, .run-step').forEach((b) => { b.disabled = on; });
+};
+
+const runIntent = async (text) => {
+  if (running || !text) return;
+  lastIntent = text;
+  if (history[0] !== text) history.unshift(text);
+  histIndex = -1;
+  // On a phone the result is on another tab — go there, or the run looks like nothing happened.
+  if (view === 'mobile') setTab('run');
+  resetPipeline();
+  setBusy(true);
+  try { await kernel.handleIntent(text); }
+  catch (err) { showResult('crash', String(err), 'the console caught this so the kernel could not wedge', 'fail'); }
+  finally {
+    setBusy(false);
+    if (view === 'desktop') q('cmd-input').focus();
+  }
+};
 
 q('cmd').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -353,19 +395,73 @@ q('cmd').addEventListener('submit', async (e) => {
   await runIntent(text);
 });
 
-quickChips.forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    const text = btn.dataset.cmd;
-    q('cmd-input').value = '';
-    await runIntent(text);
-  });
+// One delegated handler for every "run this intent" affordance on the page.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-cmd]');
+  if (btn && !btn.disabled) runIntent(btn.dataset.cmd);
 });
 
-q('howto').addEventListener('click', () => {
-  const open = q('hint').classList.toggle('open');
-  q('howto').setAttribute('aria-expanded', String(open));
+/* ── controls ─────────────────────────────────────────────── */
+q('btn-copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(q('out-body').textContent);
+    q('btn-copy').textContent = 'copied';
+    setTimeout(() => { q('btn-copy').textContent = 'copy'; }, 1200);
+  } catch { q('btn-copy').textContent = 'blocked'; }
+};
+q('btn-again').onclick = () => lastIntent && runIntent(lastIntent);
+q('btn-clear-bus').onclick = () => busEl.replaceChildren();
+q('btn-reset').onclick = () => {
+  files.reset();
+  browser.reset();
+  busEl.replaceChildren();
+  q('out').classList.remove('show');
+  q('welcome').classList.remove('hide');
+  q('tip').hidden = true;
+  closeHITL();
+  resetPipeline();
+  renderDisk();
+  pushBus('kernel', 'reset', 'disk and bus cleared', 'kernel');
+};
+q('btn-guide').onclick = () => q('samples').scrollIntoView({ block: 'start', behavior: 'smooth' });
+
+/* Desktop-only keyboard surface. A phone has no ⌘K and no room to advertise one. */
+addEventListener('keydown', (e) => {
+  if (view !== 'desktop') return;
+  const input = q('cmd-input');
+  const typing = document.activeElement === input;
+
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); input.focus(); return; }
+  if (pending && !typing) {
+    if (e.key.toLowerCase() === 'y') { e.preventDefault(); q('hitl-approve').click(); return; }
+    if (e.key.toLowerCase() === 'n') { e.preventDefault(); q('hitl-deny').click(); return; }
+  }
+  if (!typing) return;
+  if (e.key === 'Escape') { input.value = ''; histIndex = -1; return; }
+  if (e.key === 'ArrowUp' && history.length) {
+    e.preventDefault();
+    histIndex = Math.min(histIndex + 1, history.length - 1);
+    input.value = history[histIndex];
+  }
+  if (e.key === 'ArrowDown' && histIndex >= 0) {
+    e.preventDefault();
+    histIndex -= 1;
+    input.value = histIndex < 0 ? '' : history[histIndex];
+  }
 });
 
-setInterval(() => { q('clock').textContent = new Date().toTimeString().slice(0, 8); }, 1000);
-pushBus('kernel', 'boot', 'Kernel + FileAgent + BrowserAgent live', 'kernel');
+/* ── boot ─────────────────────────────────────────────────── */
+applyView();
+fillSamples();
+fillRail();
+fillWalkthrough();
+fillTable('grammar', GRAMMAR.map((g) => [g.match, g.cap, g.args]));
+fillTable('tiers', TIERS.map((t) => [t.tier, t.when, '']));
+fillCaps();
+fillMap();
+resetPipeline();
 renderDisk();
+setInterval(() => { q('clock').textContent = new Date().toTimeString().slice(0, 8); }, 1000);
+q('clock').textContent = new Date().toTimeString().slice(0, 8);
+pushBus('kernel', 'boot', 'Kernel + FileAgent + BrowserAgent live', 'kernel');
+clearUnread();

@@ -24,5 +24,4 @@ jobs:
 
       - name: Run tests
         run: npm test
-        env:
-          BASE_URL: https://artsrun.github.io/web-agent-machine
+

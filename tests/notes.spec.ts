@@ -88,6 +88,19 @@ test.describe('Notes', () => {
     await expect(page.locator('.face').first()).toBeVisible();
   });
 
+  test('kaomoji note carries the twenty-face reference table', async ({ page }) => {
+    await page.goto('./notes/kaomoji.html');
+
+    await expect(page.locator('table.kao tbody tr')).toHaveCount(20);
+    await expect(page.locator('table.kao td.k').first()).toContainText('¯');
+    await expect(page.locator('h2', { hasText: 'without looking silly' })).toBeVisible();
+    // the table is the one wide element on the page; it must scroll itself, not the page
+    const { sw, cw } = await page.evaluate(() => ({
+      sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
+    }));
+    expect(sw).toBeLessThanOrEqual(cw + 1);
+  });
+
   test('bkt simulator note loads with controls', async ({ page }) => {
     await page.goto('./notes/bkt-simulator.html');
 
