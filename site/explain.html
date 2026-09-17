@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>How it works — Web Agent Machine</title>
+<meta name="description" content="What the machine is, what the planner matches, what each layer does, and what it deliberately does not do." />
+<meta name="color-scheme" content="dark" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* Reading chrome, not operating chrome. One document scroll, one column,
+   generous measure — deliberately unlike the console. */
+:root {
+  --wafer: #0E1120; --substrate: #161A2E; --sunken: #0E1223;
+  --etch: #2A3050; --etch-soft: #222848;
+  --silk: #E6E8F4; --dim: #7C86A8; --dimmer: #4E5677;
+  --accent: #4FD6C4;
+  --layer-intent: #B8912F; --layer-kernel: #3E9C92; --layer-broker: #B05050;
+  --layer-agent: #7B66B8; --layer-store: #479E68;
+  --ok: #5FD68A; --warn: #F5A524; --stop: #FF5C5C;
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100dvh;
+  background: radial-gradient(120% 90% at 50% -10%, #171C34 0%, transparent 60%), var(--wafer);
+  color: var(--silk); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+}
+.shell { max-width: 720px; margin-inline: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.panel { background: var(--substrate); border: 1px solid var(--etch); }
+.rail { display: flex; align-items: center; gap: 16px; padding: 10px 14px; flex-wrap: wrap; }
+.mark { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; color: var(--silk); text-decoration: none; }
+.mark span { color: var(--accent); }
+.rail .back { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--dim); text-decoration: none; }
+.rail .back:hover { color: var(--accent); }
+article { padding: 26px 22px 32px; }
+h1 { font-family: var(--font-display); font-size: 28px; line-height: 1.2; margin: 0 0 6px; }
+.byline { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-bottom: 26px; }
+h2 { font-family: var(--font-display); font-size: 19px; margin: 34px 0 10px; }
+h2:first-of-type { margin-top: 0; }
+p { margin: 0 0 14px; }
+p.lead { color: #CFD4E8; }
+.eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); }
+code { font-family: var(--font-mono); font-size: .9em; color: var(--accent); }
+a { color: var(--accent); }
+
+.pipeline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 20px; }
+.pipeline span.s { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--etch); color: var(--dim); padding: 4px 9px; }
+.pipeline span.a { color: var(--dimmer); font-size: 11px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 8px; }
+th { text-align: left; font-family: var(--font-mono); font-weight: 500; font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--dimmer); padding: 0 10px 7px 0; }
+td { padding: 7px 10px 7px 0; border-top: 1px solid var(--etch-soft); vertical-align: top; }
+td:first-child { font-family: var(--font-mono); color: var(--warn); }
+td:nth-child(2) { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+td:last-child { color: var(--dim); font-size: 12px; }
+
+.cards { display: grid; gap: 8px; }
+.cards .item { border: 1px solid var(--etch-soft); border-left: 3px solid var(--c, var(--etch)); background: var(--sunken); padding: 11px 13px; }
+.cards .item b { display: block; font-size: 14px; }
+.cards .item i { font-style: normal; font-family: var(--font-mono); font-size: 10px; color: var(--dimmer); }
+.cards .item p { margin: 6px 0 0; font-size: 13px; color: var(--dim); }
+
+.runs { display: grid; gap: 7px; }
+.run-link {
+  display: grid; gap: 3px; text-decoration: none; color: inherit;
+  background: var(--sunken); border: 1px solid var(--etch-soft); padding: 10px 12px; min-height: 44px;
+}
+.run-link:hover { border-color: var(--accent); }
+.run-link b { font-family: var(--font-mono); font-size: 12.5px; font-weight: 400; color: var(--silk); }
+.run-link span { font-size: 12.5px; color: var(--dim); line-height: 1.45; }
+.group-hd { margin: 18px 0 8px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.group-hd b { font-family: var(--font-display); font-size: 15px; }
+.group-hd i { font-style: normal; font-size: 12px; color: var(--dimmer); }
+
+ol.steps { list-style: none; margin: 0; padding: 0; }
+ol.steps li { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 12px 0; border-top: 1px solid var(--etch-soft); }
+ol.steps li:first-child { border-top: 0; }
+ol.steps .n { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+ol.steps b { display: block; margin-bottom: 3px; }
+ol.steps p { margin: 0 0 8px; font-size: 13px; color: var(--dim); }
+ol.steps a { font-family: var(--font-mono); font-size: 12px; text-decoration: none; border: 1px solid var(--etch); padding: 7px 10px; display: inline-block; min-height: 36px; }
+ol.steps a:hover { border-color: var(--accent); }
+
+dl.limits { margin: 0; }
+dl.limits dt { font-weight: 600; margin-top: 14px; }
+dl.limits dt:first-child { margin-top: 0; }
+dl.limits dd { margin: 4px 0 0; color: var(--dim); font-size: 13.5px; }
+
+.keys { display: grid; gap: 6px; font-size: 13px; }
+.keys div { display: flex; justify-content: space-between; gap: 12px; color: var(--dim); }
+kbd { font-family: var(--font-mono); font-size: 11px; background: var(--sunken); border: 1px solid var(--etch); padding: 2px 6px; color: var(--accent); }
+
+.cta { display: inline-block; font-family: var(--font-mono); font-size: 13px; text-decoration: none; background: var(--accent); color: #0A0D18; padding: 12px 18px; font-weight: 600; }
+footer { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 10px 14px; }
+footer a { color: var(--dim); text-decoration: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .001ms !important; } }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="panel rail">
+    <a class="mark" href="./index.html">Web Agent <span>Machine</span></a>
+    <a class="back" href="./index.html">&larr; console</a>
+  </div>
+
+  <article class="panel">
+    <div class="eyebrow">How it works</div>
+    <h1>A broker, not a chatbot</h1>
+    <div class="byline">what it does · what it matches · what it refuses to claim</div>
+
+    <p class="lead">You type an intent. A worker turns it into tool calls, a broker decides
+    whether they are allowed, and an agent runs the ones that are — all inside this tab.
+    The interesting part is the third step: what an agent is permitted to do, who decides,
+    and what a refusal actually means.</p>
+
+    <div class="pipeline" aria-label="Execution pipeline">
+      <span class="s">intent</span><span class="a">→</span>
+      <span class="s">plan</span><span class="a">→</span>
+      <span class="s">broker</span><span class="a">→</span>
+      <span class="s">agent</span>
+    </div>
+
+    <h2>The layers</h2>
+    <div class="cards" id="map"></div>
+
+    <h2>What the planner matches</h2>
+    <p>Four verbs. Anything else is declined rather than guessed at — which is the
+    single most common reason nothing appears to happen.</p>
+    <table id="grammar">
+      <thead><tr><th>Say</th><th>Capability</th><th>Args from</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Five minutes, in order</h2>
+    <ol class="steps" id="walkthrough"></ol>
+
+    <h2>Everything you can run</h2>
+    <div id="samples"></div>
+
+    <h2>What this deliberately is not</h2>
+    <dl class="limits" id="limits"></dl>
+
+    <h2>Keys, on a keyboard</h2>
+    <div class="keys">
+      <div><span>Focus the command bar</span><kbd>⌘K</kbd></div>
+      <div><span>Previous / next intent</span><kbd>↑ ↓</kbd></div>
+      <div><span>Clear the input</span><kbd>Esc</kbd></div>
+      <div><span>Approve / deny what is pending</span><kbd>Y</kbd> <kbd>N</kbd></div>
+    </div>
+
+    <h2 style="margin-bottom:14px">Go and break it</h2>
+    <a class="cta" href="./index.html#run=list%20files">open the console →</a>
+  </article>
+
+  <footer class="panel"><a href="./index.html">console</a> · <a href="./blog.html">notes</a> · <a href="https://github.com/Artsrun/web-agent-machine">source</a></footer>
+</div>
+<script type="module" src="./explain.js"></script>
+</body>
+</html>
