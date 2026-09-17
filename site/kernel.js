@@ -31,8 +31,7 @@ export const CAPABILITIES = [
   { id: 'filesystem.list', risk: 'low', blurb: 'Enumerate the virtual disk.' },
   { id: 'filesystem.read', risk: 'low', blurb: 'Read one path from the virtual disk.' },
   { id: 'filesystem.write', risk: 'medium', blurb: 'Create or overwrite a path.' },
-  { id: 'browser.navigate', risk: 'high', blurb: 'Point the browser agent at a URL.' },
-  { id: 'browser.click', risk: 'high', blurb: 'Click a selector on the current page.' },
+  { id: 'browser.navigate', risk: 'high', blurb: 'Load a URL into a sandboxed frame you can see.' },
 ];
 
 export class CapabilityBroker {
@@ -70,8 +69,15 @@ export class CapabilityBroker {
 
 /* ── Agents ───────────────────────────────────────────────── */
 export class FileAgent {
-  constructor(seed = {}) { this.seed = { ...seed }; this.store = new Map(Object.entries(seed)); }
-  reset() { this.store = new Map(Object.entries(this.seed)); }
+  /* onChange fires on every mutation. The agent does not know what persistence
+     is — it announces, and the console decides where that lands. */
+  constructor(seed = {}, { onChange } = {}) {
+    this.seed = { ...seed };
+    this.store = new Map(Object.entries(seed));
+    this.onChange = onChange;
+  }
+  load(entries) { this.store = new Map(entries); }
+  async reset() { this.store = new Map(Object.entries(this.seed)); await this.onChange?.(this.store); }
   handlers = {
     'filesystem.read': async (req) => {
       const path = req.args?.path || '/';
@@ -83,27 +89,44 @@ export class FileAgent {
       const { path, content } = req.args || {};
       if (!path) return { ok: false, error: 'path required' };
       this.store.set(path, content ?? '');
+      // Await the persist: reporting a write as ok before it is durable means a
+      // reload one keystroke later silently loses it.
+      await this.onChange?.(this.store);
       return { ok: true, result: { written: path, bytes: String(content ?? '').length } };
     },
   };
 }
 
 export class BrowserAgent {
-  constructor() { this.url = 'about:blank'; this.history = []; }
-  reset() { this.url = 'about:blank'; this.history = []; }
+  /* The kernel stays DOM-free, so the agent is handed a surface instead of a
+     document: anything with navigate(url) -> { ok, error? }. The console
+     supplies a sandboxed iframe; a test can supply a spy. */
+  constructor(surface) { this.surface = surface; this.url = 'about:blank'; this.history = []; }
+  reset() { this.url = 'about:blank'; this.history = []; this.surface?.clear?.(); }
   handlers = {
     'browser.navigate': async (req) => {
-      const url = req.args?.url;
-      if (!url) return { ok: false, error: 'url required' };
-      this.url = url;
-      this.history.push({ action: 'navigate', url });
-      return { ok: true, result: { navigated: true, url } };
-    },
-    'browser.click': async (req) => {
-      const sel = req.args?.selector;
-      if (!sel) return { ok: false, error: 'selector required' };
-      this.history.push({ action: 'click', selector: sel });
-      return { ok: true, result: { clicked: sel, on: this.url } };
+      const raw = req.args?.url;
+      if (!raw) return { ok: false, error: 'url required' };
+
+      let target;
+      try { target = new URL(raw); } catch { return { ok: false, error: `unparseable url: ${raw}` }; }
+      if (!/^https?:$/.test(target.protocol)) {
+        return { ok: false, error: `refused scheme ${target.protocol} — http and https only` };
+      }
+      // The frame runs with allow-same-origin so real sites render. That is only
+      // safe while the agent can never aim it at us: an agent that can frame its
+      // own origin with scripts enabled is an agent that can rewrite the console.
+      if (typeof location !== 'undefined' && target.origin === location.origin) {
+        return { ok: false, error: 'refused: the agent may not frame its own origin' };
+      }
+
+      const res = await this.surface.navigate(target.href);
+      this.history.push({ action: 'navigate', url: target.href, ok: res.ok });
+      if (!res.ok) return { ok: false, error: res.error || 'frame refused the url' };
+      this.url = target.href;
+      // We committed a URL to a frame. Whether the site permits framing is the
+      // site's decision and it is visible on screen — so do not claim it loaded.
+      return { ok: true, result: { committed: target.href, frame: 'sandboxed, no cookies, no storage' } };
     },
   };
 }
@@ -115,12 +138,12 @@ export function plan(text) {
   const lower = text.toLowerCase();
   const id = () => crypto.randomUUID();
   const path = (text.match(/(\/[\w.\-/]+)/) || [])[1];
-  const url = (text.match(/\bhttps?:\/\/[^\s"']+/) || [])[0]
-    || ((text.match(/\b((?:[\w-]+\.)+(?:com|org|net|io|dev|ai|sh|app|md))\b/) || [])[1]
-      ? 'https://' + text.match(/\b((?:[\w-]+\.)+(?:com|org|net|io|dev|ai|sh|app|md))\b/)[1]
-      : null);
+  const bare = (text.match(/\b((?:[\w-]+\.)+(?:com|org|net|io|dev|ai|sh|app|md))\b/) || [])[1];
+  // Any explicit scheme is preserved verbatim — the agent decides what it may
+  // use. Only a bare domain gets a scheme chosen for it.
+  const url = (text.match(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"']+/i) || [])[0]
+    || (bare ? `https://${bare}` : null);
   const quoted = (text.match(/["'`]([^"'`]+)["'`]/) || [])[1];
-  const selector = (text.match(/\bclick\s+(?:on\s+)?([#.][\w-]+)/i) || [])[1];
 
   if (/\b(write|save|create|touch)\b/.test(lower) && !/\bfile\s*(system)?\.read\b/.test(lower)) {
     const p = path || '/notes.txt';
@@ -133,10 +156,6 @@ export function plan(text) {
   if (/\b(read|open|show|cat|print)\b/.test(lower) && (path || /\b(file|notes|readme)\b/.test(lower))) {
     const p = path || (/readme/.test(lower) ? '/readme.md' : '/notes.txt');
     return [{ id: id(), description: `Read ${p}`, capability: 'filesystem.read', args: { path: p } }];
-  }
-  if (/\bclick\b/.test(lower)) {
-    return [{ id: id(), description: `Click ${selector || 'button'}`, capability: 'browser.click',
-      args: { selector: selector || 'button' } }];
   }
   if (/\b(navigate|go to|open url|browse|visit)\b/.test(lower) || url) {
     const u = url || 'https://example.com';

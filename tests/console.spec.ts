@@ -48,9 +48,14 @@ test.describe('Console — shared behaviour', () => {
     await expect(hitl).toHaveClass(/open/);
     await expect(page.locator('#hitl-cap')).toContainText('browser.navigate');
 
+    // nothing is committed to the frame while the broker is still waiting
+    await expect(page.locator('#frame-wrap')).toBeHidden();
+
     await page.locator('#hitl-approve').click();
     await expect(hitl).not.toHaveClass(/open/);
     await expect(page.locator('#out-body')).toContainText('example.com');
+    await expect(page.locator('#frame-wrap')).toBeVisible();
+    await expect(page.locator('#frame')).toHaveAttribute('src', 'https://example.com/');
 
     // one-shot: the same intent must ask again
     await page.locator('#cmd-input').fill('navigate to example.com');
@@ -67,9 +72,35 @@ test.describe('Console — shared behaviour', () => {
 
     await expect(page.locator('#out-label')).toHaveText('denied');
     await expect(page.locator('#bus li').first()).toContainText('denied');
+    // the whole point of the gate: denying means the page never loads
+    await expect(page.locator('#frame-wrap')).toBeHidden();
     // no consolation write: a denial that still touches the disk is not a denial
     await expect(page.locator('#disk-count')).toHaveText(before!);
     await expect(page.locator('#files')).not.toContainText('fallback');
+  });
+
+  test('the agent refuses a scheme it may not use, before the broker is asked', async ({ page }) => {
+    await page.locator('#cmd-input').fill('navigate to ftp://example.com/x');
+    await page.locator('#cmd button').click();
+
+    await page.locator('#hitl-approve').click();
+    await expect(page.locator('#out-body')).toContainText('refused scheme ftp:');
+    await expect(page.locator('#frame-wrap')).toBeHidden();
+  });
+
+  test('the disk survives a reload', async ({ page }) => {
+    await page.locator('#cmd-input').fill('write /persisted.md "still here"');
+    await page.locator('#cmd button').click();
+    await expect(page.locator('#files')).toContainText('/persisted.md');
+
+    await page.reload();
+    await expect(page.locator('#files')).toContainText('/persisted.md');
+    await expect(page.locator('#bus li').last()).toContainText('disk restored');
+
+    // reset is the only way out, and it is durable too
+    await page.locator('#btn-reset').click();
+    await page.reload();
+    await expect(page.locator('#files')).not.toContainText('/persisted.md');
   });
 
   test('an unmatched intent declines rather than inventing a tool', async ({ page }) => {
@@ -102,7 +133,7 @@ test.describe('Console — shared behaviour', () => {
     // the catalogue outlives the first run
     await expect(page.locator('#samples .sample').first()).toHaveAttribute('data-cmd', /.+/);
     expect(await page.locator('#samples .sample').count()).toBeGreaterThanOrEqual(10);
-    expect(await page.locator('#grammar tbody tr').count()).toBeGreaterThanOrEqual(5);
+    expect(await page.locator('#grammar tbody tr').count()).toBeGreaterThanOrEqual(4);
     // nothing on screen advertises a model tier — there is no model
     await expect(page.locator('#samples')).not.toContainText('6b');
     expect(await page.locator('#walkthrough li').count()).toBeGreaterThanOrEqual(5);

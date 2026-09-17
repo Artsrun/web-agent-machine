@@ -7,6 +7,7 @@
 
 import { Kernel, FileAgent, BrowserAgent, CAPABILITIES, LAYERS } from './kernel.js';
 import { GROUPS, SAMPLES, GRAMMAR, WALKTHROUGH, MAP } from './samples.js';
+import * as Disk from './disk.js';
 
 const q = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -16,9 +17,43 @@ const el = (tag, cls, text) => {
   return n;
 };
 
+/* ── the frame: the one place an agent action leaves a visible mark ──
+   browser.navigate used to assign a string to a field, so APPROVE and DENY
+   had identical consequences — none. It now commits a URL to a sandboxed
+   frame, which is the whole point of asking you first. */
+const frameSurface = {
+  navigate: (url) => new Promise((resolve) => {
+    const f = q('frame');
+    q('frame-url').textContent = url;
+    q('frame-wrap').hidden = false;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      f.onload = null;
+      // We can observe that the frame took the URL. We cannot read a
+      // cross-origin document to find out whether the site served it — so
+      // that is not claimed anywhere. You are looking at the answer.
+      resolve({ ok: true });
+    };
+    const timer = setTimeout(finish, 4000);
+    f.onload = finish;
+    f.src = url;
+  }),
+  clear: () => {
+    q('frame').src = 'about:blank';
+    q('frame-url').textContent = '';
+    q('frame-wrap').hidden = true;
+  },
+};
+
 /* ── machine ──────────────────────────────────────────────── */
-const files = new FileAgent({ '/readme.md': '# Web Agent Machine\nA capability-secured agent kernel, in a tab.' });
-const browser = new BrowserAgent();
+const files = new FileAgent(
+  { '/readme.md': '# Web Agent Machine\nA capability-secured agent kernel, in a tab.' },
+  { onChange: (store) => Disk.save(store) },
+);
+const browser = new BrowserAgent(frameSurface);
 const kernel = new Kernel();
 kernel.registerAgent(files.handlers);
 kernel.registerAgent(browser.handlers);
@@ -79,7 +114,7 @@ const fillSamples = () => {
 
 /* The phone gets one thumb-height row of the most useful intents,
    always within reach — not a grid that vanishes after the first run. */
-const RAIL = ['list files', 'write a file', 'read /readme.md', 'navigate to example.com', 'click #submit', 'read /does-not-exist.md'];
+const RAIL = ['list files', 'write a file', 'read /readme.md', 'navigate to example.com', 'read /does-not-exist.md'];
 const fillRail = () => {
   const rail = q('rail');
   rail.replaceChildren();
@@ -283,6 +318,7 @@ kernel.bus.on('*', (e) => {
       }
       break;
     case 'denied':
+      frameSurface.clear();
       pushBus('you', 'denied', e.payload.capability, 'policy');
       setStage('broker', 'you denied', 'fail');
       setStage('agent', 'not reached', 'false');
@@ -405,8 +441,11 @@ q('btn-copy').onclick = async () => {
 };
 q('btn-again').onclick = () => lastIntent && runIntent(lastIntent);
 q('btn-clear-bus').onclick = () => busEl.replaceChildren();
-q('btn-reset').onclick = () => {
-  files.reset();
+q('btn-frame-close').onclick = () => frameSurface.clear();
+q('btn-reset').onclick = async () => {
+  // reset() persists the seed through onChange, so clearing separately would
+  // race it — whichever transaction landed last would win.
+  await files.reset();
   browser.reset();
   busEl.replaceChildren();
   q('out').classList.remove('show');
@@ -445,6 +484,11 @@ addEventListener('keydown', (e) => {
 });
 
 /* ── boot ─────────────────────────────────────────────────── */
+// Top-level await: the disk must be whole before anything renders it, or a
+// reload flashes the seed and then corrects itself.
+const saved = await Disk.load();
+if (saved?.length) files.load(saved);
+
 applyView();
 fillSamples();
 fillRail();
@@ -454,5 +498,5 @@ fillCaps();
 fillMap();
 resetPipeline();
 renderDisk();
-pushBus('kernel', 'boot', 'Kernel + FileAgent + BrowserAgent live', 'kernel');
+pushBus('kernel', 'boot', saved?.length ? `Kernel live · disk restored (${saved.length})` : 'Kernel + FileAgent + BrowserAgent live', 'kernel');
 clearUnread();

@@ -25,6 +25,7 @@
   --tap: 44px;
 }
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0; overflow: hidden;
@@ -129,7 +130,7 @@ kbd {
 
 .welcome p { margin: 0 0 10px; color: var(--dim); }
 .welcome strong { color: var(--silk); }
-.out { display: none; flex-direction: column; gap: 8px; min-height: 0; }
+.out { display: none; flex-direction: column; gap: 8px; flex: none; }
 .out.show { display: flex; }
 .welcome.hide { display: none; }
 .badge { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--l-store); }
@@ -138,7 +139,7 @@ kbd {
 .badge[data-tone="wait"] { color: var(--l-intent); }
 .meta { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); }
 #out-body {
-  margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono);
+  margin: 0; flex: none; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono);
   font-size: 13px; color: var(--silk); background: var(--sunken);
   border: 1px solid var(--etch); padding: 12px; overflow: auto; max-height: 40dvh;
 }
@@ -150,6 +151,13 @@ kbd {
   font-family: var(--font-mono); font-size: 12px; padding: 7px 10px; cursor: pointer; min-height: 36px;
 }
 .tip button:hover { border-color: var(--l-kernel); }
+
+/* ── sandboxed frame ─────────────────────────────────────── */
+.frame { margin: 0; display: flex; flex-direction: column; gap: 8px; flex: none; }
+.frame figcaption { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.frame figcaption code { font-family: var(--font-mono); font-size: 11.5px; color: var(--l-kernel); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.frame iframe { width: 100%; height: 44dvh; border: 1px solid var(--etch); background: #fff; display: block; }
+.frame .note { margin: 0; font-size: 11.5px; color: var(--dimmer); }
 
 /* ── HITL ────────────────────────────────────────────────── */
 .hitl {
@@ -277,6 +285,7 @@ kbd {
   #cmd-input { font-size: 14px; }
   .map .node:hover p { display: block; } /* a pointer can ask without lighting it up */
   #out-body { max-height: none; }
+  .frame iframe { height: 38dvh; }
 }
 @media (min-width: 1180px) {
   .shell { grid-template-columns: 320px minmax(0, 1fr) 320px; }
@@ -362,6 +371,19 @@ kbd {
         </div>
         <p class="tip" id="tip" hidden></p>
       </div>
+
+      <!-- the only place an agent action leaves a visible mark -->
+      <figure class="frame" id="frame-wrap" hidden>
+        <figcaption>
+          <span class="eyebrow">sandboxed frame</span>
+          <code id="frame-url"></code>
+          <button class="tool" id="btn-frame-close" type="button">close</button>
+        </figcaption>
+        <iframe id="frame" title="Sandboxed browser-agent frame"
+                sandbox="allow-scripts allow-same-origin"
+                referrerpolicy="no-referrer" loading="lazy"></iframe>
+        <p class="note">No cookies, no storage, no access to this page. A site may refuse to be framed — if it does, you are looking at its refusal.</p>
+      </figure>
     </div>
 
     <div class="hitl" id="hitl" role="alertdialog" aria-labelledby="hitl-title">

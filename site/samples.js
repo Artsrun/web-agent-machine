@@ -3,7 +3,7 @@
 
 export const GROUPS = [
   { id: 'disk', label: 'Virtual disk', note: 'Granted up front. Runs immediately.' },
-  { id: 'browser', label: 'Browser', note: 'High risk. Stops for your approval.' },
+  { id: 'browser', label: 'Browser', note: 'High risk. Stops for your approval, then you watch it happen.' },
   { id: 'failure', label: 'Failure paths', note: 'Nothing fails silently. Watch the bus.' },
 ];
 
@@ -18,11 +18,11 @@ export const SAMPLES = [
     does: 'Reads the seeded file.', cap: 'filesystem.read' },
 
   { group: 'browser', label: 'navigate', intent: 'navigate to example.com',
-    does: 'Asks the broker for browser.navigate — you must APPROVE.', cap: 'browser.navigate' },
-  { group: 'browser', label: 'navigate elsewhere', intent: 'go to https://developer.mozilla.org',
-    does: 'The URL is parsed out of your sentence, not hardcoded.', cap: 'browser.navigate' },
-  { group: 'browser', label: 'click a selector', intent: 'click #submit',
-    does: 'Also high risk, also gated.', cap: 'browser.click' },
+    does: 'APPROVE and the page loads in the frame below. DENY and it does not.', cap: 'browser.navigate' },
+  { group: 'browser', label: 'navigate elsewhere', intent: 'go to https://wikipedia.org',
+    does: 'The URL is parsed out of your sentence. Many sites refuse to be framed — that refusal is real, and you see it.', cap: 'browser.navigate' },
+  { group: 'browser', label: 'a scheme the agent may not use', intent: 'navigate to ftp://example.com/x',
+    does: 'The agent checks the URL before the broker is even asked.', cap: 'browser.navigate' },
 
   { group: 'failure', label: 'missing file', intent: 'read /does-not-exist.md',
     does: 'ENOENT surfaces as a tool_result, not an exception.', cap: 'filesystem.read' },
@@ -39,7 +39,6 @@ export const GRAMMAR = [
   { match: 'read · open · show · cat · print', cap: 'filesystem.read', args: 'first /path in the text' },
   { match: 'write · save · create · touch', cap: 'filesystem.write', args: '/path + "quoted content"' },
   { match: 'navigate · go to · visit · browse', cap: 'browser.navigate', args: 'any URL or bare domain' },
-  { match: 'click', cap: 'browser.click', args: '#id or .class' },
 ];
 
 export const WALKTHROUGH = [
@@ -48,11 +47,11 @@ export const WALKTHROUGH = [
   { n: 2, title: 'Read it back', intent: 'read /hello.md',
     watch: 'Same broker, different capability. Low risk, so no interruption.' },
   { n: 3, title: 'Try a risky one', intent: 'navigate to example.com',
-    watch: 'Execution stops. A red approval bar appears — this is HITL.' },
+    watch: 'Execution stops before anything loads. A red approval bar appears — this is HITL.' },
   { n: 4, title: 'Deny it', intent: null,
     watch: 'Press DENY. Execution stops there — no retry, no consolation write. A denial that still does something is not a denial.' },
   { n: 5, title: 'Approve the next one', intent: 'navigate to example.com',
-    watch: 'Press APPROVE. The grant is spent on use — run it again and it asks again.' },
+    watch: 'Press APPROVE. The page appears in a sandboxed frame with no cookies and no storage. The grant is spent on use — run it again and it asks again.' },
 ];
 
 /* The layer stack, live-highlighted as events fire.
@@ -66,6 +65,6 @@ export const MAP = [
     role: 'An autonomous agent without permissions is a security incident with a personality.', events: ['tool_call', 'error', 'denied'] },
   { id: 'agents', layer: 'agent', title: 'Agent mesh', sub: 'FileAgent · BrowserAgent',
     role: 'Agents declare their capability set and cannot widen it later.', events: ['tool_result'] },
-  { id: 'store', layer: 'store', title: 'Virtual disk', sub: 'in-memory, this tab only',
-    role: 'Nothing leaves the page. Reload and it is gone.', events: ['tool_result'] },
+  { id: 'store', layer: 'store', title: 'Virtual disk', sub: 'IndexedDB, this origin only',
+    role: 'Nothing leaves the page, but it now survives the reload. Reset is the only way out.', events: ['tool_result'] },
 ];

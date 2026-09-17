@@ -26,8 +26,10 @@ terminal — nothing is retried and nothing is written in its place.
 ## Status
 
 - Kernel + EventBus + CapabilityBroker + WorkerBridge
-- FileAgent (real, in-memory) + BrowserAgent (**does not yet touch a browser** —
-  `navigate` records a URL, `click` records a selector; see the audit below)
+- FileAgent, persisted to IndexedDB — the disk survives a reload
+- BrowserAgent: `browser.navigate` commits the URL to a sandboxed iframe with
+  no cookies, no storage and no access to the console. Approve and the page
+  loads in front of you; deny and it does not.
 - HITL approval, one-shot and spent on use
 - Live console with separate desktop and mobile control surfaces
 - Machine map that lights up from real bus events
@@ -42,7 +44,8 @@ close the gap.
 ```text
 site/
   index.html     console shell — mobile-first, desktop grid over the top
-  console.js     UI only: panes, tabs, keyboard, HITL, pipeline strip
+  console.js     UI only: panes, tabs, keyboard, HITL, frame, pipeline strip
+  disk.js        IndexedDB persistence for the virtual disk
   kernel.js      the machine — no DOM, importable on its own
   samples.js     samples, intent grammar, tiers, walkthrough, machine map
   blog.html      notes index
