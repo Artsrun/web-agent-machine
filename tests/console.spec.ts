@@ -7,7 +7,6 @@ test.describe('Console — shared behaviour', () => {
 
   test('boots the live kernel', async ({ page }) => {
     await expect(page.locator('.mark')).toContainText('Web Agent');
-    await expect(page.locator('#mode')).toHaveText('LIVE');
     // Visibility is a per-view concern — the view suites below own that.
     await expect(page.locator('#bus li').first()).toContainText('boot');
   });
@@ -25,19 +24,8 @@ test.describe('Console — shared behaviour', () => {
 
     await expect(page.locator('#out')).toHaveClass(/show/);
     await expect(page.locator('#out-body')).toContainText('/readme.md');
-    await expect(page.locator('#st-route')).toHaveText('6b');
     await expect(page.locator('#st-broker')).toHaveText('granted');
     await expect.poll(() => page.locator('#bus li').count()).toBeGreaterThanOrEqual(5);
-  });
-
-  test('reasoning verbs escalate the model tier', async ({ page }) => {
-    await page.locator('#cmd-input').fill('analyze and refactor the file list');
-    await page.locator('#cmd button').click();
-    await expect(page.locator('#st-route')).toHaveText('8b');
-
-    await page.locator('#cmd-input').fill('architect a multi-agent pipeline that lists files');
-    await page.locator('#cmd button').click();
-    await expect(page.locator('#st-route')).toHaveText('9b');
   });
 
   test('path and quoted content are parsed out of the sentence', async ({ page }) => {
@@ -70,13 +58,18 @@ test.describe('Console — shared behaviour', () => {
     await expect(hitl).toHaveClass(/open/);
   });
 
-  test('denying falls back instead of failing silently', async ({ page }) => {
+  test('denying is terminal — nothing runs, nothing is written in its place', async ({ page }) => {
+    const before = await page.locator('#disk-count').textContent();
+
     await page.locator('#cmd-input').fill('navigate to example.com');
     await page.locator('#cmd button').click();
     await page.locator('#hitl-deny').click();
 
-    await expect(page.locator('#files')).toContainText('/nav-fallback.txt');
-    await expect(page.locator('#bus')).toContainText('fallback');
+    await expect(page.locator('#out-label')).toHaveText('denied');
+    await expect(page.locator('#bus li').first()).toContainText('denied');
+    // no consolation write: a denial that still touches the disk is not a denial
+    await expect(page.locator('#disk-count')).toHaveText(before!);
+    await expect(page.locator('#files')).not.toContainText('fallback');
   });
 
   test('an unmatched intent declines rather than inventing a tool', async ({ page }) => {
@@ -110,6 +103,8 @@ test.describe('Console — shared behaviour', () => {
     await expect(page.locator('#samples .sample').first()).toHaveAttribute('data-cmd', /.+/);
     expect(await page.locator('#samples .sample').count()).toBeGreaterThanOrEqual(10);
     expect(await page.locator('#grammar tbody tr').count()).toBeGreaterThanOrEqual(5);
+    // nothing on screen advertises a model tier — there is no model
+    await expect(page.locator('#samples')).not.toContainText('6b');
     expect(await page.locator('#walkthrough li').count()).toBeGreaterThanOrEqual(5);
   });
 
@@ -133,7 +128,7 @@ test.describe('Console — shared behaviour', () => {
   });
 
   test('the machine map lights up as events pass through', async ({ page }) => {
-    await expect(page.locator('#map .node')).toHaveCount(6);
+    await expect(page.locator('#map .node')).toHaveCount(5);
     await page.locator('#cmd-input').fill('list files');
     await page.locator('#cmd button').click();
     await expect(page.locator('#map-store')).toHaveAttribute('data-live', 'true');

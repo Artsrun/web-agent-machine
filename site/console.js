@@ -6,7 +6,7 @@
    intent behaves, on top of the CSS that decides what is on screen. */
 
 import { Kernel, FileAgent, BrowserAgent, CAPABILITIES, LAYERS } from './kernel.js';
-import { GROUPS, SAMPLES, GRAMMAR, TIERS, WALKTHROUGH, MAP } from './samples.js';
+import { GROUPS, SAMPLES, GRAMMAR, WALKTHROUGH, MAP } from './samples.js';
 
 const q = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -69,7 +69,7 @@ const fillSamples = () => {
       const b = el('button', 'sample');
       b.type = 'button';
       b.dataset.cmd = s.intent;
-      b.append(el('span', 's-cmd', s.intent), el('span', 's-tier', s.tier), el('span', 's-does', s.does));
+      b.append(el('span', 's-cmd', s.intent), el('span', 's-does', s.does));
       list.append(b);
     }
     wrap.append(hd, list);
@@ -124,8 +124,9 @@ const fillCaps = () => {
   host.replaceChildren();
   for (const c of CAPABILITIES) {
     const row = el('div');
-    // colour alone does not say why write is amber — name the risk next to the state
-    row.append(el('span', null, c.id), el('b', c.risk, `${c.risk} · ${c.risk === 'high' ? 'asks you' : 'granted'}`));
+    // Two states, not three: every capability here is granted to the one
+    // principal. Risk decides whether spending it needs you, not whether it exists.
+    row.append(el('span', null, c.id), el('b', c.risk, c.risk === 'high' ? `${c.risk} · asks you` : `${c.risk} · runs`));
     row.title = c.blurb;
     host.append(row);
   }
@@ -174,10 +175,9 @@ const pushBus = (src, ev, msg, layer = 'kernel') => {
 /* ── pipeline strip ───────────────────────────────────────── */
 const PIPE = [
   ['intent', 'intent', 'var(--l-intent)'],
-  ['route', 'route', 'var(--l-conc)'],
   ['plan', 'plan', 'var(--l-kernel)'],
   ['broker', 'broker', 'var(--l-policy)'],
-  ['agent', 'agent', 'var(--l-wasm)'],
+  ['agent', 'agent', 'var(--l-agent)'],
 ];
 const resetPipeline = () => {
   const host = q('pipeline');
@@ -238,10 +238,6 @@ kernel.bus.on('*', (e) => {
       pushBus('kernel', 'intent', e.payload.text.slice(0, 64), 'intent');
       setStage('intent', 'intent');
       break;
-    case 'route':
-      pushBus('router', 'route', `tier ${e.payload.model}`, 'router');
-      setStage('route', e.payload.model);
-      break;
     case 'plan': {
       const desc = e.payload.steps.map((s) => s.description).join(' → ');
       pushBus('worker', 'plan', desc, 'kernel');
@@ -278,11 +274,6 @@ kernel.bus.on('*', (e) => {
         openHITL(e.payload.capability, e.payload.args);
         showResult('waiting for you', `${e.payload.capability} is marked high risk, so the broker stopped here.\n\nApprove or deny below. Nothing runs until you decide.`, 'execution paused', 'wait');
         showTip({ hitl: true });
-      } else if (e.payload.code === 'HITL_DENIED') {
-        pushBus('broker', 'denied', e.payload.message, 'policy');
-      } else if (e.payload.code === 'FALLBACK') {
-        pushBus('kernel', 'fallback', e.payload.message, 'kernel');
-        setStage('agent', `→ ${e.payload.fallbackTo.split('.')[0]}`);
       } else {
         pushBus('broker', 'error', e.payload.message || e.payload.code, 'policy');
         setStage('broker', 'failed', 'fail');
@@ -291,13 +282,21 @@ kernel.bus.on('*', (e) => {
         showResult('error', e.payload.message || e.payload.code, e.payload.capability || '', 'fail');
       }
       break;
+    case 'denied':
+      pushBus('you', 'denied', e.payload.capability, 'policy');
+      setStage('broker', 'you denied', 'fail');
+      setStage('agent', 'not reached', 'false');
+      showResult('denied', `You refused ${e.payload.capability}.\n\nNothing ran, and nothing was written in its place. The refusal is on the bus.`, 'execution stopped', 'fail');
+      showTip({ denied: true });
+      break;
   }
 });
 
 /* What to try next, chosen from what just happened. The single most
    useful hint is the one that arrives after you already did something. */
 const TIPS = [
-  { when: (r) => r.hitl, text: 'Deny it instead and watch the kernel fall back rather than give up.', run: null },
+  { when: (r) => r.hitl, text: 'Deny it instead — the run stops there, and the refusal is recorded.', run: null },
+  { when: (r) => r.denied, text: 'Approve one to see the other half. The grant is spent on use:', run: () => 'navigate to example.com' },
   { when: (r) => r.cap === 'filesystem.write', text: 'Read it back:', run: (r) => `read ${r.path}` },
   { when: (r) => r.cap === 'filesystem.list', text: 'Now try one the broker will stop:', run: () => 'navigate to example.com' },
   { when: (r) => r.cap === 'filesystem.read' && r.ok, text: 'Overwrite it:', run: (r) => `write ${r.path} "second draft"` },
@@ -342,17 +341,12 @@ q('hitl-approve').onclick = async () => {
   if (!p) return;
   kernel.approve(p.cap);
   pushBus('you', 'approve', p.cap, 'policy');
-  await kernel.executeWithFallback(p.cap, p.args);
+  await kernel.execute(p.cap, p.args);
 };
 q('hitl-deny').onclick = async () => {
   const p = closeHITL();
   if (!p) return;
-  await kernel.bus.emit({ type: 'error', payload: { code: 'HITL_DENIED', message: `you denied ${p.cap}`, recoverable: true, capability: p.cap } });
-  const rule = kernel.fallbacks.find((f) => f.from === p.cap);
-  if (rule) {
-    await kernel.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason, recoverable: true, capability: p.cap, fallbackTo: rule.to } });
-    await kernel.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(p.args) : {}, 1);
-  }
+  await kernel.deny(p.cap, p.args);
 };
 
 /* ── running ──────────────────────────────────────────────── */
@@ -456,12 +450,9 @@ fillSamples();
 fillRail();
 fillWalkthrough();
 fillTable('grammar', GRAMMAR.map((g) => [g.match, g.cap, g.args]));
-fillTable('tiers', TIERS.map((t) => [t.tier, t.when, '']));
 fillCaps();
 fillMap();
 resetPipeline();
 renderDisk();
-setInterval(() => { q('clock').textContent = new Date().toTimeString().slice(0, 8); }, 1000);
-q('clock').textContent = new Date().toTimeString().slice(0, 8);
 pushBus('kernel', 'boot', 'Kernel + FileAgent + BrowserAgent live', 'kernel');
 clearUnread();

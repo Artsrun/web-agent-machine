@@ -4,9 +4,8 @@
 export const LAYERS = {
   intent: { label: 'Intent', color: 'var(--l-intent)' },
   kernel: { label: 'Kernel', color: 'var(--l-kernel)' },
-  router: { label: 'Router', color: 'var(--l-conc)' },
   policy: { label: 'Broker', color: 'var(--l-policy)' },
-  agent: { label: 'Agents', color: 'var(--l-wasm)' },
+  agent: { label: 'Agents', color: 'var(--l-agent)' },
   store: { label: 'Storage', color: 'var(--l-store)' },
 };
 
@@ -57,7 +56,8 @@ export class CapabilityBroker {
     const def = this.registry.get(req.capability);
     if (!def) return { ok: false, error: 'unknown capability' };
     const has = (this.grants.get(req.principal) || []).some((g) => g.capability === req.capability);
-    if (!has) return { ok: false, error: 'no grant', requiresHITL: def.risk === 'high' };
+    // Ungranted is terminal: approval cannot conjure a grant, so never prompt for one.
+    if (!has) return { ok: false, error: `not granted to ${req.principal}` };
     const needs = this.needsHITL(req.capability);
     const okHITL = this.approved.get(req.principal)?.has(req.capability);
     if (needs && !okHITL) return { ok: false, error: 'HITL required', requiresHITL: true };
@@ -145,17 +145,6 @@ export function plan(text) {
   return [{ id: id(), description: 'Acknowledge intent (no tool matched)' }];
 }
 
-/* ── ModelRouter ──────────────────────────────────────────── */
-export class ModelRouter {
-  static TIER_9B = /\b(architect(?:ure|ing|ural)?|design(?:s|ing)? a system|orchestrat(?:e|es|ing|ion)|multi[- ]agent|system design|end-?to-?end design)\b/i;
-  static TIER_8B = /\b(refactor(?:s|ing|ed)?|plan(?:s|ning|ned)?|analy(?:ze|se|zing|sing|sis)|multi-?step|migrat(?:e|es|ing|ion)|optimi[sz]e(?:s|d|ing)?|debug(?:s|ging|ged)?|investigat(?:e|es|ing|ion)|compare|summari[sz]e)\b/i;
-  route(text) {
-    if (ModelRouter.TIER_9B.test(text)) return '9b';
-    if (ModelRouter.TIER_8B.test(text)) return '8b';
-    return '6b';
-  }
-}
-
 /* ── WorkerBridge ─────────────────────────────────────────── */
 export class WorkerBridge {
   constructor() {
@@ -189,16 +178,7 @@ export class Kernel {
     this.bus = new EventBus();
     this.broker = new CapabilityBroker();
     this.principal = 'desktop-agent';
-    this.modelRouter = new ModelRouter();
     this.workerBridge = new WorkerBridge();
-    this.fallbacks = [
-      { from: 'browser.navigate', to: 'filesystem.write',
-        mapArgs: (a) => ({ path: '/nav-fallback.txt', content: `navigate blocked: ${(a && a.url) || '(no url provided)'}` }),
-        reason: 'navigate denied/failed → log to file' },
-      { from: 'browser.click', to: 'filesystem.write',
-        mapArgs: (a) => ({ path: '/click-fallback.txt', content: `click blocked: ${JSON.stringify(a)}` }),
-        reason: 'click denied/failed → log to file' },
-    ];
   }
   grant(cap) { this.broker.grant({ capability: cap, principal: this.principal }); }
   approve(cap) { this.broker.approve(this.principal, cap); }
@@ -207,24 +187,21 @@ export class Kernel {
   async handleIntent(text) {
     const intent = { id: crypto.randomUUID(), text, timestamp: Date.now() };
     await this.bus.emit({ type: 'intent', payload: intent });
-    const model = this.modelRouter.route(text);
-    await this.bus.emit({ type: 'route', payload: { intentId: intent.id, model } });
     const steps = await this.workerBridge.offloadPlan(text);
-    const planObj = { id: crypto.randomUUID(), intentId: intent.id, steps, model };
+    const planObj = { id: crypto.randomUUID(), intentId: intent.id, steps };
     await this.bus.emit({ type: 'plan', payload: planObj });
     for (const step of steps) {
       if (!step.capability) {
         await this.bus.emit({ type: 'noop', payload: { description: step.description, text } });
         continue;
       }
-      const stopped = await this.executeWithFallback(step.capability, step.args || {});
+      const stopped = await this.execute(step.capability, step.args || {});
       if (stopped) break;
     }
-    return { intent, plan: planObj, model };
+    return { intent, plan: planObj };
   }
 
-  async executeWithFallback(capability, args, depth = 0) {
-    if (depth > 2) return true;
+  async execute(capability, args) {
     const callId = crypto.randomUUID();
     await this.bus.emit({ type: 'tool_call', payload: { id: callId, capability, args, principal: this.principal } });
     const result = await this.broker.request({ requestId: callId, capability, args, principal: this.principal });
@@ -238,12 +215,14 @@ export class Kernel {
       await this.bus.emit({ type: 'error', payload: { code: 'HITL_REQUIRED', message: `Human approval needed for ${capability}`, recoverable: true, capability, args } });
       return true;
     }
-    const rule = this.fallbacks.find((f) => f.from === capability);
-    if (rule) {
-      await this.bus.emit({ type: 'error', payload: { code: 'FALLBACK', message: rule.reason || `${capability} → ${rule.to}`, recoverable: true, capability, fallbackTo: rule.to } });
-      return this.executeWithFallback(rule.to, rule.mapArgs ? rule.mapArgs(args) : args, depth + 1);
-    }
     await this.bus.emit({ type: 'error', payload: { code: 'TOOL_FAILED', message: result.error || `${capability} failed`, recoverable: false, capability } });
     return false;
+  }
+
+  /* A denial is terminal. Nothing is retried, and nothing is written on the
+     agent's behalf to soften it — "denied" has to mean denied, or the gate
+     is decoration. The record of the refusal lives on the bus. */
+  async deny(capability, args) {
+    await this.bus.emit({ type: 'denied', payload: { capability, args } });
   }
 }

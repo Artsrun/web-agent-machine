@@ -4,38 +4,32 @@
 export const GROUPS = [
   { id: 'disk', label: 'Virtual disk', note: 'Granted up front. Runs immediately.' },
   { id: 'browser', label: 'Browser', note: 'High risk. Stops for your approval.' },
-  { id: 'routing', label: 'Model routing', note: 'Same tool, different tier — watch the badge.' },
   { id: 'failure', label: 'Failure paths', note: 'Nothing fails silently. Watch the bus.' },
 ];
 
 export const SAMPLES = [
   { group: 'disk', label: 'list files', intent: 'list files',
-    does: 'Enumerates the virtual disk.', cap: 'filesystem.list', tier: '6b' },
+    does: 'Enumerates the virtual disk.', cap: 'filesystem.list' },
   { group: 'disk', label: 'write a file', intent: 'write a file',
-    does: 'Writes /notes.txt with default content.', cap: 'filesystem.write', tier: '6b' },
+    does: 'Writes /notes.txt with default content.', cap: 'filesystem.write' },
   { group: 'disk', label: 'write /todo.md', intent: 'write /todo.md "ship the mobile view"',
-    does: 'A path and a quoted string become the args.', cap: 'filesystem.write', tier: '6b' },
+    does: 'A path and a quoted string become the args.', cap: 'filesystem.write' },
   { group: 'disk', label: 'read /readme.md', intent: 'read /readme.md',
-    does: 'Reads the seeded file.', cap: 'filesystem.read', tier: '6b' },
+    does: 'Reads the seeded file.', cap: 'filesystem.read' },
 
   { group: 'browser', label: 'navigate', intent: 'navigate to example.com',
-    does: 'Asks the broker for browser.navigate — you must APPROVE.', cap: 'browser.navigate', tier: '6b' },
+    does: 'Asks the broker for browser.navigate — you must APPROVE.', cap: 'browser.navigate' },
   { group: 'browser', label: 'navigate elsewhere', intent: 'go to https://developer.mozilla.org',
-    does: 'The URL is parsed out of your sentence, not hardcoded.', cap: 'browser.navigate', tier: '6b' },
+    does: 'The URL is parsed out of your sentence, not hardcoded.', cap: 'browser.navigate' },
   { group: 'browser', label: 'click a selector', intent: 'click #submit',
-    does: 'Also high risk, also gated.', cap: 'browser.click', tier: '6b' },
-
-  { group: 'routing', label: 'route to 8b', intent: 'analyze and refactor the file list',
-    does: 'Reasoning verbs escalate the tier to 8b.', cap: 'filesystem.list', tier: '8b' },
-  { group: 'routing', label: 'route to 9b', intent: 'architect a multi-agent pipeline that lists files',
-    does: 'Architecture verbs escalate to 9b.', cap: 'filesystem.list', tier: '9b' },
+    does: 'Also high risk, also gated.', cap: 'browser.click' },
 
   { group: 'failure', label: 'missing file', intent: 'read /does-not-exist.md',
-    does: 'ENOENT surfaces as a tool_result, not an exception.', cap: 'filesystem.read', tier: '6b' },
+    does: 'ENOENT surfaces as a tool_result, not an exception.', cap: 'filesystem.read' },
   { group: 'failure', label: 'deny a navigate', intent: 'navigate to example.com',
-    does: 'Press DENY — the kernel falls back to writing /nav-fallback.txt.', cap: 'browser.navigate', tier: '6b' },
+    does: 'Press DENY — nothing runs, and the refusal is on the bus.', cap: 'browser.navigate' },
   { group: 'failure', label: 'no tool matches', intent: 'tell me a joke',
-    does: 'The planner declines instead of inventing a tool.', cap: null, tier: '6b' },
+    does: 'The planner declines instead of inventing a tool.', cap: null },
 ];
 
 /* What the planner actually matches. The single biggest source of
@@ -48,12 +42,6 @@ export const GRAMMAR = [
   { match: 'click', cap: 'browser.click', args: '#id or .class' },
 ];
 
-export const TIERS = [
-  { tier: '6b', when: 'Everything else. Classification and simple tool selection.' },
-  { tier: '8b', when: 'refactor · plan · analyze · migrate · optimize · debug · compare · summarize' },
-  { tier: '9b', when: 'architect · system design · orchestrate · multi-agent' },
-];
-
 export const WALKTHROUGH = [
   { n: 1, title: 'Write something', intent: 'write /hello.md "first contact"',
     watch: 'The virtual disk gains /hello.md. The bus shows intent → plan → tool_call → grant.' },
@@ -62,7 +50,7 @@ export const WALKTHROUGH = [
   { n: 3, title: 'Try a risky one', intent: 'navigate to example.com',
     watch: 'Execution stops. A red approval bar appears — this is HITL.' },
   { n: 4, title: 'Deny it', intent: null,
-    watch: 'Press DENY. The kernel does not give up: it falls back to writing /nav-fallback.txt so the denial is on the record.' },
+    watch: 'Press DENY. Execution stops there — no retry, no consolation write. A denial that still does something is not a denial.' },
   { n: 5, title: 'Approve the next one', intent: 'navigate to example.com',
     watch: 'Press APPROVE. The grant is spent on use — run it again and it asks again.' },
 ];
@@ -72,12 +60,10 @@ export const WALKTHROUGH = [
 export const MAP = [
   { id: 'intent', layer: 'intent', title: 'Intent surface', sub: 'command bar · sample chips',
     role: 'Typed records, so they can be replayed, diffed and audited.', events: ['intent'] },
-  { id: 'router', layer: 'router', title: 'Model router', sub: '6B / 8B / 9B',
-    role: 'Routing is a classification problem, so the smallest tier handles it.', events: ['route'] },
   { id: 'worker', layer: 'kernel', title: 'Planner worker', sub: 'off the main thread',
     role: 'The plan is built in a Web Worker; the main thread stays free for input.', events: ['plan'] },
   { id: 'broker', layer: 'policy', title: 'Capability broker', sub: 'grants · risk · HITL',
-    role: 'An autonomous agent without permissions is a security incident with a personality.', events: ['tool_call', 'error'] },
+    role: 'An autonomous agent without permissions is a security incident with a personality.', events: ['tool_call', 'error', 'denied'] },
   { id: 'agents', layer: 'agent', title: 'Agent mesh', sub: 'FileAgent · BrowserAgent',
     role: 'Agents declare their capability set and cannot widen it later.', events: ['tool_result'] },
   { id: 'store', layer: 'store', title: 'Virtual disk', sub: 'in-memory, this tab only',
