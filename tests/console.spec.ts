@@ -45,14 +45,16 @@ test.describe('Console — shared behaviour', () => {
     await page.locator('#cmd button').click();
 
     const hitl = page.locator('#hitl');
-    await expect(hitl).toHaveClass(/open/);
+    await expect(hitl).toHaveAttribute('open', '');
     await expect(page.locator('#hitl-cap')).toContainText('browser.navigate');
+    // modal by construction: nothing behind it can be reached mid-decision
+    await expect(page.locator('#cmd-input')).not.toBeFocused();
 
     // nothing is committed to the frame while the broker is still waiting
     await expect(page.locator('#frame-wrap')).toBeHidden();
 
     await page.locator('#hitl-approve').click();
-    await expect(hitl).not.toHaveClass(/open/);
+    await expect(hitl).not.toHaveAttribute('open', '');
     await expect(page.locator('#out-body')).toContainText('example.com');
     await expect(page.locator('#frame-wrap')).toBeVisible();
     await expect(page.locator('#frame')).toHaveAttribute('src', 'https://example.com/');
@@ -60,7 +62,18 @@ test.describe('Console — shared behaviour', () => {
     // one-shot: the same intent must ask again
     await page.locator('#cmd-input').fill('navigate to example.com');
     await page.locator('#cmd button').click();
-    await expect(hitl).toHaveClass(/open/);
+    await expect(hitl).toHaveAttribute('open', '');
+  });
+
+  test('dismissing the approval counts as denying it', async ({ page }) => {
+    await page.locator('#cmd-input').fill('navigate to example.com');
+    await page.locator('#cmd button').click();
+    await expect(page.locator('#hitl')).toHaveAttribute('open', '');
+
+    // a security prompt defaults to no, so Esc is not an escape hatch
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#out-label')).toHaveText('denied');
+    await expect(page.locator('#frame-wrap')).toBeHidden();
   });
 
   test('denying is terminal — nothing runs, nothing is written in its place', async ({ page }) => {
@@ -181,8 +194,7 @@ test.describe('Desktop view', () => {
   test('every pane is on screen at once; no tab bar', async ({ page }) => {
     await expect(page.locator('body')).toHaveAttribute('data-view', 'desktop');
     await expect(page.locator('[data-pane="run"]')).toBeVisible();
-    await expect(page.locator('[data-pane="state"]')).toBeVisible();
-    await expect(page.locator('[data-pane="bus"]')).toBeVisible();
+    await expect(page.locator('[data-pane="inspect"]')).toBeVisible();
     await expect(page.locator('#tabbar')).toBeHidden();
     await expect(page.locator('.keys')).toBeVisible();
     await expect(page.locator('#rail')).toBeHidden();
@@ -204,10 +216,10 @@ test.describe('Desktop view', () => {
 
     await page.locator('#cmd-input').fill('navigate to example.com');
     await page.keyboard.press('Enter');
-    await expect(page.locator('#hitl')).toHaveClass(/open/);
-    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await expect(page.locator('#hitl')).toHaveAttribute('open', '');
+    // the dialog focuses APPROVE, so Y works without first blurring anything
     await page.keyboard.press('y');
-    await expect(page.locator('#hitl')).not.toHaveClass(/open/);
+    await expect(page.locator('#hitl')).not.toHaveAttribute('open', '');
     await expect(page.locator('#out-body')).toContainText('example.com');
   });
 });
@@ -218,42 +230,81 @@ test.describe('Mobile view', () => {
     await page.goto('./index.html');
   });
 
-  test('one pane at a time, driven by the tab bar', async ({ page }) => {
+  test('two tabs, one pane at a time', async ({ page }) => {
     await expect(page.locator('body')).toHaveAttribute('data-view', 'mobile');
-    await expect(page.locator('#tabbar')).toBeVisible();
+    await expect(page.locator('#tabbar button')).toHaveCount(2);
     await expect(page.locator('[data-pane="run"]')).toBeVisible();
-    await expect(page.locator('[data-pane="state"]')).toBeHidden();
+    await expect(page.locator('[data-pane="inspect"]')).toBeHidden();
 
-    await page.locator('#tabbar button[data-tab="state"]').click();
-    await expect(page.locator('[data-pane="state"]')).toBeVisible();
+    await page.locator('#tabbar button[data-tab="inspect"]').click();
+    await expect(page.locator('[data-pane="inspect"]')).toBeVisible();
     await expect(page.locator('[data-pane="run"]')).toBeHidden();
-    await expect(page.locator('#tabbar button[data-tab="state"]')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tabbar button[data-tab="inspect"]')).toHaveAttribute('aria-selected', 'true');
+    // disk and bus are one surface now, not two tabs
+    await expect(page.locator('#files')).toBeVisible();
+    await expect(page.locator('#bus')).toBeVisible();
   });
 
-  test('the sample rail stays within thumb reach on every tab', async ({ page }) => {
-    await expect(page.locator('#rail .chip').first()).toBeVisible();
-    await page.locator('#tabbar button[data-tab="bus"]').click();
-    await expect(page.locator('#rail .chip').first()).toBeVisible();
+  test('the tab bar uses words, not glyphs', async ({ page }) => {
+    await expect(page.locator('#tabbar')).toContainText('Run');
+    await expect(page.locator('#tabbar')).toContainText('Inspect');
+    await expect(page.locator('#tabbar svg')).toHaveCount(0);
+  });
+
+  test('the page is the only scroller', async ({ page }) => {
+    // three nested scrollers meant no gesture had an obvious target
+    const nested = await page.evaluate(() => [...document.querySelectorAll('.pane, .run-body')]
+      .filter((n) => getComputedStyle(n).overflowY === 'auto' || getComputedStyle(n).overflowY === 'scroll').length);
+    expect(nested).toBe(0);
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe('hidden');
+  });
+
+  test('the dock stays put while the page scrolls', async ({ page }) => {
+    await expect(page.locator('#cmd-input')).toBeVisible();
+    await page.locator('#tabbar button[data-tab="inspect"]').click();
+    await page.mouse.wheel(0, 1200);
+    await expect(page.locator('#cmd-input')).toBeVisible();
+    await expect(page.locator('#tabbar')).toBeVisible();
+  });
+
+  test('the rail shows every chip it has — nothing behind a fade', async ({ page }) => {
+    const chips = page.locator('#rail .chip');
+    await expect(chips).toHaveCount(3);
+    for (let i = 0; i < 3; i++) await expect(chips.nth(i)).toBeInViewport();
+
+    await page.locator('#tabbar button[data-tab="inspect"]').click();
+    await expect(chips.first()).toBeVisible();
     await expect(page.locator('#cmd-input')).toBeVisible();
   });
 
-  test('running from another tab jumps back to the result', async ({ page }) => {
-    await page.locator('#tabbar button[data-tab="bus"]').click();
+  test('running from the other tab jumps back to the result', async ({ page }) => {
+    await page.locator('#tabbar button[data-tab="inspect"]').click();
     await page.locator('#rail .chip').first().click();
     await expect(page.locator('body')).toHaveAttribute('data-tab', 'run');
     await expect(page.locator('#out')).toHaveClass(/show/);
   });
 
-  test('three tabs, not four — the guide is a page', async ({ page }) => {
-    await expect(page.locator('#tabbar button')).toHaveCount(3);
-    await expect(page.locator('#tabbar')).not.toContainText('Guide');
+  test('the bus shows twelve rows until asked for the rest', async ({ page }) => {
+    for (const intent of ['list files', 'write /a.md "a"', 'write /b.md "b"', 'read /a.md']) {
+      await page.locator('#cmd-input').fill(intent);
+      await page.locator('#cmd button').click();
+      await expect(page.locator('#cmd button')).toBeEnabled();
+    }
+    await page.locator('#tabbar button[data-tab="inspect"]').click();
+
+    const rows = page.locator('#bus li');
+    expect(await rows.count()).toBeGreaterThan(12);
+    expect(await rows.evaluateAll((ns) => ns.filter((n) => n.checkVisibility()).length)).toBe(12);
+
+    await page.locator('#btn-bus-all').click();
+    expect(await rows.evaluateAll((ns) => ns.filter((n) => n.checkVisibility()).length)).toBe(await rows.count());
   });
 
-  test('the bus tab flags unread activity', async ({ page }) => {
+  test('the inspect tab flags unread activity', async ({ page }) => {
     await page.locator('#rail .chip').first().click();
-    await expect(page.locator('#tabbar button[data-tab="bus"]')).toHaveAttribute('data-unread', 'true');
-    await page.locator('#tabbar button[data-tab="bus"]').click();
-    await expect(page.locator('#tabbar button[data-tab="bus"]')).toHaveAttribute('data-unread', 'false');
+    await expect(page.locator('#tabbar button[data-tab="inspect"]')).toHaveAttribute('data-unread', 'true');
+    await page.locator('#tabbar button[data-tab="inspect"]').click();
+    await expect(page.locator('#tabbar button[data-tab="inspect"]')).toHaveAttribute('data-unread', 'false');
   });
 
   test('tap targets meet the 44px minimum', async ({ page }) => {

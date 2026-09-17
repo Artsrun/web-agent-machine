@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="mask">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -10,30 +10,32 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-/* ── tokens ──────────────────────────────────────────────── */
+/* ── tokens ──────────────────────────────────────────────────
+   Two disjoint scales. --layer-* says WHICH PART of the machine spoke and
+   is used only by the map and the bus. --ok/--warn/--stop say HOW IT WENT
+   and are used only by risk, results, the pipeline and the approval sheet.
+   Nothing reads as both, which is what red used to do three ways. */
 :root {
   --wafer: #0B0E1A; --substrate: #14182A; --sunken: #0E1223;
   --etch: #2C3354; --etch-soft: #222848;
   --silk: #E8EAF6; --dim: #8B94B3; --dimmer: #5A6284;
   --accent: #4FD6C4;
-  /* layer identity — which part of the machine spoke. Desaturated on purpose. */
   --layer-intent: #B8912F; --layer-kernel: #3E9C92; --layer-broker: #B05050;
   --layer-agent: #7B66B8; --layer-store: #479E68;
-  /* state — how it went. Saturated, and used nowhere else. */
   --ok: #5FD68A; --warn: #F5A524; --stop: #FF5C5C;
   --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
   --safe-b: env(safe-area-inset-bottom, 0px);
+  --kb: 0px;          /* keyboard inset, set from VisualViewport on mobile */
   --gap: 10px;
   --tap: 44px;
 }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { height: 100%; }
 body {
-  margin: 0; overflow: hidden;
-  background: radial-gradient(120% 70% at 50% -20%, #1A2140 0%, transparent 55%), var(--wafer);
+  margin: 0;
+  background: radial-gradient(120% 70% at 50% -20%, #1A2140 0%, transparent 55%) fixed, var(--wafer);
   color: var(--silk); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
 }
@@ -43,42 +45,45 @@ button { font: inherit; color: inherit; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--etch); }
 
-/* ── shell: mobile is the base case ──────────────────────── */
+/* ── shell: the phone is the base case, and the page simply scrolls ──
+   There used to be three nested scroll containers in one column — the pane,
+   the run body and the result pre — so no gesture had an obvious target.
+   Now the document is the only scroller. */
 .shell {
-  display: grid; height: 100dvh; max-width: 1240px; margin-inline: auto;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  grid-template-areas: "top" "panes" "dock" "tabs";
-  gap: var(--gap); padding: var(--gap) var(--gap) 0;
+  max-width: 1240px; margin-inline: auto;
+  padding: var(--gap) var(--gap) 0;
+  display: flex; flex-direction: column; gap: var(--gap);
+  min-height: 100dvh;
 }
-.pane { grid-area: panes; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
-body[data-tab="run"]   .pane:not([data-pane="run"]),
-body[data-tab="state"] .pane:not([data-pane="state"]),
-body[data-tab="bus"]   .pane:not([data-pane="bus"]) { display: none; }
+.pane { min-width: 0; }
+body[data-tab="run"]     .pane:not([data-pane="run"]),
+body[data-tab="inspect"] .pane:not([data-pane="inspect"]) { display: none; }
 
-.panel { background: var(--substrate); border: 1px solid var(--etch); min-height: 0; }
+.panel { background: var(--substrate); border: 1px solid var(--etch); }
 
 /* ── topbar ──────────────────────────────────────────────── */
-.topbar { grid-area: top; display: flex; align-items: center; gap: 10px; padding: 9px 12px; flex-wrap: wrap; }
+.topbar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; flex-wrap: wrap; }
 .mark { font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; }
 .mark span { color: var(--accent); }
 .tools { display: flex; gap: 6px; margin-left: auto; }
 .tool {
   background: transparent; border: 1px solid var(--etch); color: var(--dim);
   font-family: var(--font-mono); font-size: 11px; padding: 6px 10px; cursor: pointer;
-  min-height: 32px; transition: color .12s, border-color .12s;
+  min-height: 32px; display: inline-flex; align-items: center;
+  transition: color .12s, border-color .12s;
 }
 .tool:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ── shared primitives ───────────────────────────────────── */
 .card { padding: 12px 14px; }
 .card + .card { border-top: 1px solid var(--etch); }
-h2.hd, h3.hd {
+h2.hd {
   margin: 0 0 10px; font-family: var(--font-mono); font-weight: 500;
-  font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dimmer);
+  font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
-h2.hd { color: var(--dim); }
-.muted { color: var(--dim); }
+h2.hd .tool { margin-left: auto; }
+.muted { color: var(--dimmer); font-weight: 400; letter-spacing: 0; text-transform: none; }
 .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dimmer); }
 kbd {
   font-family: var(--font-mono); font-size: 10px; background: var(--sunken);
@@ -86,8 +91,7 @@ kbd {
 }
 
 /* ── run pane ────────────────────────────────────────────── */
-.run { display: flex; flex-direction: column; min-height: 0; }
-.run-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; flex: 1; }
+.run-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .pipeline { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .stage {
   font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em;
@@ -99,8 +103,9 @@ kbd {
 .pipeline .arrow { color: var(--dimmer); font-size: 10px; }
 
 .welcome p { margin: 0 0 10px; color: var(--dim); }
+.welcome p:last-child { margin-bottom: 0; }
 .welcome strong { color: var(--silk); }
-.out { display: none; flex-direction: column; gap: 8px; flex: none; }
+.out { display: none; flex-direction: column; gap: 8px; }
 .out.show { display: flex; }
 .welcome.hide { display: none; }
 .badge { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ok); }
@@ -109,9 +114,9 @@ kbd {
 .badge[data-tone="wait"] { color: var(--warn); }
 .meta { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); }
 #out-body {
-  margin: 0; flex: none; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono);
+  margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono);
   font-size: 13px; color: var(--silk); background: var(--sunken);
-  border: 1px solid var(--etch); padding: 12px; overflow: auto; max-height: 40dvh;
+  border: 1px solid var(--etch); padding: 12px; max-height: 50dvh; overflow: auto;
 }
 .out-foot { display: flex; gap: 6px; }
 .tip { margin: 4px 0 0; font-size: 12.5px; color: var(--dim); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -123,28 +128,37 @@ kbd {
 .tip button:hover { border-color: var(--accent); }
 
 /* ── sandboxed frame ─────────────────────────────────────── */
-.frame { margin: 0; display: flex; flex-direction: column; gap: 8px; flex: none; }
+.frame { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .frame figcaption { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .frame figcaption code { font-family: var(--font-mono); font-size: 11.5px; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-.frame iframe { width: 100%; height: 44dvh; border: 1px solid var(--etch); background: #fff; display: block; }
+.frame iframe { width: 100%; height: 52dvh; border: 1px solid var(--etch); background: #fff; display: block; }
 .frame .note { margin: 0; font-size: 11.5px; color: var(--dimmer); }
 
-/* ── HITL ────────────────────────────────────────────────── */
-.hitl {
-  display: none; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 11px 13px; border-top: 1px solid var(--stop); background: #2A1520; flex: none;
+/* ── approval: a sheet, not a strip ──────────────────────────
+   The old bar sat at the bottom of a scrolling pane, so APPROVE and DENY
+   could end up behind the dock. A decision must never be reachable only by
+   scrolling — <dialog> puts it on top and makes the page behind it inert. */
+#hitl {
+  border: 0; padding: 0; margin: 0 auto auto; max-width: 560px; width: 100%;
+  background: transparent; color: inherit;
+  position: fixed; inset: auto 0 0; z-index: 30;
 }
-.hitl.open { display: flex; }
-.hitl .why { font-size: 12px; color: #F3C8C8; flex-basis: 100%; margin: 0; }
-.hitl code { font-family: var(--font-mono); font-size: 12px; color: #FFD9D9; }
-.hitl .acts { display: flex; gap: 8px; margin-left: auto; }
-.hitl button { border: 0; font-family: var(--font-mono); font-size: 12px; padding: 0 16px; min-height: var(--tap); cursor: pointer; }
+#hitl::backdrop { background: rgba(6, 8, 16, .72); }
+#hitl .sheet {
+  background: #2A1520; border: 1px solid var(--stop); border-bottom: 0;
+  padding: 14px 14px calc(14px + var(--safe-b));
+  display: flex; flex-direction: column; gap: 10px;
+}
+#hitl code { font-family: var(--font-mono); font-size: 12px; color: #FFD9D9; word-break: break-all; }
+#hitl .why { font-size: 12.5px; color: #F3C8C8; margin: 0; }
+#hitl .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#hitl button { border: 0; font-family: var(--font-mono); font-size: 13px; min-height: var(--tap); cursor: pointer; }
 #hitl-approve { background: var(--stop); color: #fff; font-weight: 600; }
-#hitl-deny { background: transparent; color: var(--dim); border: 1px solid var(--etch); }
+#hitl-deny { background: transparent; color: var(--silk); border: 1px solid var(--etch); }
 
-/* ── state pane: disk, caps, map ─────────────────────────── */
+/* ── inspect: disk, caps, map, bus ───────────────────────── */
 .files { list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 12px; }
-.files li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0; border-bottom: 1px solid var(--etch-soft); }
+.files li { border-bottom: 1px solid var(--etch-soft); }
 .files li:last-child { border-bottom: 0; }
 .files button { width: 100%; display: flex; justify-content: space-between; gap: 8px; background: none; border: 0; padding: 9px 0; cursor: pointer; text-align: left; min-height: var(--tap); align-items: center; }
 .files button:hover { color: var(--accent); }
@@ -169,28 +183,32 @@ kbd {
 .map .node p { margin: 5px 0 0; font-size: 11.5px; color: var(--dim); line-height: 1.4; display: none; }
 .map .node[data-live="true"] p { display: block; }
 
-/* ── bus ─────────────────────────────────────────────────── */
-.bus { display: flex; flex-direction: column; min-height: 0; }
-.bus > header { display: flex; align-items: center; gap: 9px; padding: 8px 13px; border-bottom: 1px solid var(--etch); flex: none; }
-.bus > header .eyebrow { margin-right: auto; }
-#bus { list-style: none; margin: 0; padding: 7px 13px; font-family: var(--font-mono); font-size: 11.5px; overflow-y: auto; flex: 1; min-height: 0; }
-#bus li { display: grid; grid-template-columns: auto 60px 76px 1fr; gap: 10px; padding: 2px 0; color: var(--dim); align-items: baseline; }
-#bus li b { color: var(--c, var(--accent)); font-weight: 500; }
+#bus { list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 11.5px; }
+#bus li { display: grid; gap: 2px 10px; padding: 6px 0; color: var(--dim); border-top: 1px solid var(--etch-soft); }
+#bus li:first-child { border-top: 0; }
+#bus li b { color: var(--c, var(--layer-kernel)); font-weight: 500; }
 #bus li time { color: var(--dimmer); }
 #bus li em { font-style: normal; color: var(--silk); }
-#bus li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Two lines on a phone. One line meant a 1fr column about 120px wide with
+   text-overflow: ellipsis — texture, not data. */
+#bus li { grid-template-columns: auto auto 1fr; }
+#bus li span { grid-column: 1 / -1; word-break: break-word; }
+#bus li:nth-child(n+13) { display: none; }
+#bus.all li:nth-child(n+13) { display: grid; }
 
-/* ── dock: sample rail + command bar ─────────────────────── */
-.dock { grid-area: dock; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.rail {
-  display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none;
-  padding-bottom: 2px; scroll-snap-type: x proximity;
+/* ── dock + tabbar: one sticky footer ────────────────────── */
+.footer {
+  position: sticky; bottom: var(--kb); z-index: 5;
+  margin-inline: calc(var(--gap) * -1);
+  padding: 0 var(--gap);
+  background: linear-gradient(transparent, var(--wafer) 18%);
 }
-.rail::-webkit-scrollbar { display: none; }
-/* fade the right edge so the rail reads as scrollable rather than clipped */
-.rail { -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+.dock { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
+/* Wrap rather than scroll: a masked, horizontally scrolling rail hid half
+   its own contents behind a gradient. */
+.rail { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
-  flex: none; scroll-snap-align: start; font-family: var(--font-mono); font-size: 12px;
+  font-family: var(--font-mono); font-size: 12px;
   background: var(--substrate); border: 1px solid var(--etch); color: var(--silk);
   padding: 0 12px; min-height: 36px; cursor: pointer; white-space: nowrap;
 }
@@ -209,54 +227,54 @@ kbd {
   min-height: var(--tap); font-family: var(--font-mono); font-weight: 600; cursor: pointer;
 }
 #cmd button:disabled { opacity: .5; cursor: progress; }
-.keys { display: none; font-family: var(--font-mono); font-size: 10.5px; color: var(--dimmer); gap: 12px; }
+.keys { display: none; font-family: var(--font-mono); font-size: 10.5px; color: var(--dimmer); gap: 12px; padding: 2px 0 6px; }
 
-/* ── tabbar (mobile control surface) ─────────────────────── */
+/* Words, not glyphs. A book meant "guide" and a waveform meant "bus" to
+   nobody who had not already been told. */
 .tabbar {
-  grid-area: tabs; display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(2, 1fr);
   background: var(--substrate); border-top: 1px solid var(--etch);
-  margin-inline: calc(var(--gap) * -1); padding-bottom: var(--safe-b);
+  margin-inline: calc(var(--gap) * -1); margin-top: 8px;
+  padding-bottom: var(--safe-b);
 }
 .tabbar button {
-  background: none; border: 0; border-top: 2px solid transparent; padding: 9px 4px;
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--dimmer); cursor: pointer; min-height: var(--tap);
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  position: relative; background: none; border: 0; border-top: 2px solid transparent;
+  padding: 10px 4px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dimmer); cursor: pointer; min-height: var(--tap);
 }
-.tabbar button svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.6; }
 .tabbar button[aria-selected="true"] { color: var(--accent); border-top-color: var(--accent); background: #171C36; }
-.tabbar button { position: relative; }
-.tabbar .dot { position: absolute; top: 7px; right: 50%; margin-right: -16px; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); opacity: 0; }
+.tabbar .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); opacity: 0; margin-left: 6px; vertical-align: middle; }
 .tabbar button[data-unread="true"] .dot { opacity: 1; }
 
 /* ══ DESKTOP ═════════════════════════════════════════════════
-   Not a reflow of the phone layout — a different instrument:
-   everything visible at once, keyboard-driven, no tab switching. */
+   A different instrument, not a reflow: everything at once, keyboard
+   driven, its own scrollers because there is room for them. */
 @media (min-width: 900px) {
+  body { overflow: hidden; }
   .shell {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    grid-template-rows: auto minmax(0, 1fr) auto 168px;
-    grid-template-areas:
-      "top   top"
-      "run   state"
-      "dock  state"
-      "bus   bus";
+    display: grid; height: 100dvh; min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 328px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "top top" "run inspect" "foot inspect";
     padding-bottom: var(--gap);
   }
-  .pane { grid-area: auto; display: flex !important; flex-direction: column; }
+  .topbar { grid-area: top; }
+  .pane { display: block !important; min-height: 0; overflow: auto; }
   [data-pane="run"] { grid-area: run; }
-  [data-pane="state"] { grid-area: state; }
-  [data-pane="bus"] { grid-area: bus; }
+  [data-pane="inspect"] { grid-area: inspect; }
+  .footer { grid-area: foot; position: static; margin-inline: 0; padding: 0; background: none; }
+  .dock { padding-top: 0; }
   .tabbar { display: none; }
   .keys { display: flex; }
-  .dock .rail { display: none; }        /* samples live in the rail column instead */
+  .rail { display: none; }          /* the catalogue is one click away in the explainer */
   #cmd-input { font-size: 14px; }
-  .map .node:hover p { display: block; } /* a pointer can ask without lighting it up */
-  #out-body { max-height: none; }
-  .frame iframe { height: 38dvh; }
-}
-@media (min-width: 1180px) {
-  .shell { grid-template-columns: minmax(0, 1fr) 352px; }
+  #out-body, .frame iframe { max-height: none; height: auto; }
+  .frame iframe { height: 46dvh; }
+  .map .node:hover p { display: block; }
+  #bus { font-size: 11.5px; }
+  #bus li { grid-template-columns: auto 60px 84px 1fr; padding: 2px 0; border-top: 0; }
+  #bus li span { grid-column: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bus li:nth-child(n+13) { display: grid; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
@@ -270,13 +288,13 @@ kbd {
     <div class="mark">Web Agent <span>Machine</span></div>
     <div class="tools">
       <a class="tool" href="./explain.html">how it works →</a>
-      <button class="tool" id="btn-reset" type="button" title="Clear the disk and the bus">reset</button>
+      <button class="tool" id="btn-reset" type="button" title="Restore the seeded disk and clear the bus">reset</button>
       <a class="tool" href="./blog.html">notes →</a>
     </div>
   </header>
 
   <!-- ── RUN ───────────────────────────────────────────── -->
-  <section class="panel pane run" data-pane="run" aria-label="Run">
+  <section class="panel pane" data-pane="run" aria-label="Run">
     <div class="run-body">
       <div class="pipeline" id="pipeline" aria-label="Execution pipeline"></div>
 
@@ -310,68 +328,67 @@ kbd {
         <p class="note">No cookies, no storage, no access to this page. A site may refuse to be framed — if it does, you are looking at its refusal.</p>
       </figure>
     </div>
-
-    <div class="hitl" id="hitl" role="alertdialog" aria-labelledby="hitl-title">
-      <span class="eyebrow" id="hitl-title" style="color:var(--stop)">Approval required</span>
-      <code id="hitl-cap"></code>
-      <p class="why" id="hitl-why"></p>
-      <div class="acts">
-        <button type="button" id="hitl-deny">DENY</button>
-        <button type="button" id="hitl-approve">APPROVE</button>
-      </div>
-    </div>
   </section>
 
-  <!-- ── STATE ─────────────────────────────────────────── -->
-  <section class="panel pane" data-pane="state" aria-label="Machine state">
+  <!-- ── INSPECT ───────────────────────────────────────── -->
+  <section class="panel pane" data-pane="inspect" aria-label="Machine state">
     <div class="card">
       <h2 class="hd">Virtual disk <span class="muted" id="disk-count"></span></h2>
       <ul class="files" id="files"></ul>
     </div>
     <div class="card">
-      <h2 class="hd">Capabilities <span class="muted">— principal: desktop-agent</span></h2>
+      <h2 class="hd">Capabilities <span class="muted">principal: desktop-agent</span></h2>
       <div class="caps" id="caps"></div>
     </div>
     <div class="card">
-      <h2 class="hd">Machine map — lights up live</h2>
+      <h2 class="hd">Machine map <span class="muted">lights up live</span></h2>
       <div class="map" id="map"></div>
     </div>
+    <div class="card">
+      <h2 class="hd">Event bus
+        <button class="tool" id="btn-bus-all" type="button" aria-expanded="false">show all</button>
+        <button class="tool" id="btn-clear-bus" type="button">clear</button>
+      </h2>
+      <ol id="bus"></ol>
+    </div>
   </section>
 
-  <!-- ── BUS ───────────────────────────────────────────── -->
-  <section class="panel pane bus" data-pane="bus" aria-label="Event bus">
-    <header>
-      <span class="eyebrow">Event bus — live kernel</span>
-      <button class="tool" id="btn-clear-bus" type="button">clear</button>
-    </header>
-    <ol id="bus"></ol>
-  </section>
+  <!-- ── FOOTER: dock + tabs, sticky above the keyboard ── -->
+  <div class="footer">
+    <div class="dock">
+      <div class="rail" id="rail" aria-label="Quick intents"></div>
+      <form id="cmd" autocomplete="off">
+        <label for="cmd-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Intent</label>
+        <input id="cmd-input" name="intent" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="write /todo.md &quot;ship it&quot;" />
+        <button type="submit" id="cmd-send">SEND</button>
+      </form>
+      <div class="keys">
+        <span><kbd>⌘K</kbd> focus</span><span><kbd>↑</kbd> history</span>
+        <span><kbd>Esc</kbd> clear</span><span><kbd>Y</kbd>/<kbd>N</kbd> approve</span>
+      </div>
+    </div>
 
-  <!-- ── DOCK ──────────────────────────────────────────── -->
-  <div class="dock">
-    <div class="rail" id="rail" aria-label="Quick samples"></div>
-    <form id="cmd" autocomplete="off">
-      <label class="visually-hidden" for="cmd-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Intent</label>
-      <input id="cmd-input" name="intent" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="write /todo.md &quot;ship it&quot;" />
-      <button type="submit" id="cmd-send">SEND</button>
-    </form>
-    <div class="keys">
-      <span><kbd>⌘K</kbd> focus</span><span><kbd>↑</kbd> history</span>
-      <span><kbd>Esc</kbd> clear</span><span><kbd>Y</kbd>/<kbd>N</kbd> approve</span>
+    <nav class="tabbar" id="tabbar" role="tablist" aria-label="Views">
+      <button role="tab" type="button" data-tab="run" aria-selected="true">Run</button>
+      <button role="tab" type="button" data-tab="inspect" aria-selected="false">Inspect<span class="dot"></span></button>
+    </nav>
+  </div>
+</div>
+
+<!-- Modal by construction: nothing behind it is clickable while a decision
+     is pending, and dismissing it counts as DENY. -->
+<dialog id="hitl" aria-labelledby="hitl-title">
+  <div class="sheet">
+    <span class="eyebrow" id="hitl-title" style="color:var(--stop)">Approval required</span>
+    <code id="hitl-cap"></code>
+    <p class="why" id="hitl-why"></p>
+    <div class="acts">
+      <button type="button" id="hitl-deny">DENY</button>
+      <button type="button" id="hitl-approve">APPROVE</button>
     </div>
   </div>
+</dialog>
 
-  <!-- ── TABBAR (mobile) ───────────────────────────────── -->
-  <nav class="tabbar" id="tabbar" role="tablist" aria-label="Views">
-    <button role="tab" type="button" data-tab="run" aria-selected="true">
-      <svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Run</button>
-    <button role="tab" type="button" data-tab="state" aria-selected="false">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6"/><rect x="3" y="14" width="18" height="6"/></svg>State</button>
-    <button role="tab" type="button" data-tab="bus" aria-selected="false"><span class="dot"></span>
-      <svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Bus</button>
-  </nav>
-
-</div>
 <script type="module" src="./console.js"></script>
 </body>
 </html>

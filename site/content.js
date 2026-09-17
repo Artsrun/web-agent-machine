@@ -17,10 +17,10 @@ export const GROUPS = [
 export const SAMPLES = [
   { group: 'disk', intent: 'list files', primary: true,
     does: 'Enumerates the virtual disk.' },
-  { group: 'disk', intent: 'write /todo.md "ship the mobile view"', primary: true,
-    does: 'A path and a quoted string become the args.' },
-  { group: 'disk', intent: 'write a file',
+  { group: 'disk', intent: 'write a file', primary: true,
     does: 'No path given, so it writes /notes.txt with default content.' },
+  { group: 'disk', intent: 'write /todo.md "ship the mobile view"',
+    does: 'A path and a quoted string become the args.' },
   { group: 'disk', intent: 'read /readme.md',
     does: 'Reads the seeded file.' },
 
@@ -31,7 +31,7 @@ export const SAMPLES = [
   { group: 'browser', intent: 'navigate to ftp://example.com/x',
     does: 'The agent vets the scheme before the broker is even asked.' },
 
-  { group: 'failure', intent: 'read /does-not-exist.md', primary: true,
+  { group: 'failure', intent: 'read /does-not-exist.md',
     does: 'ENOENT arrives as a tool_result, not an exception.' },
   { group: 'failure', intent: 'tell me a joke',
     does: 'The planner declines instead of inventing a tool.' },

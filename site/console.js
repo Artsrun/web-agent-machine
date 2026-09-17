@@ -76,12 +76,12 @@ const tabButtons = [...tabbar.querySelectorAll('button')];
 const setTab = (name) => {
   document.body.dataset.tab = name;
   tabButtons.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-  if (name === 'bus') clearUnread();
+  if (name === 'inspect') clearUnread();
 };
-const clearUnread = () => tabbar.querySelector('[data-tab="bus"]').dataset.unread = 'false';
+const clearUnread = () => { tabbar.querySelector('[data-tab="inspect"]').dataset.unread = 'false'; };
 const markUnread = () => {
-  if (view === 'mobile' && document.body.dataset.tab !== 'bus') {
-    tabbar.querySelector('[data-tab="bus"]').dataset.unread = 'true';
+  if (view === 'mobile' && document.body.dataset.tab !== 'inspect') {
+    tabbar.querySelector('[data-tab="inspect"]').dataset.unread = 'true';
   }
 };
 tabbar.addEventListener('click', (e) => {
@@ -148,12 +148,23 @@ const stamp = () => {
   const t = new Date();
   return `${t.toTimeString().slice(0, 8)}.${String(t.getMilliseconds()).padStart(3, '0')}`;
 };
+/* The phone shows the last twelve; the rest is one tap away. Sixty rows of
+   11.5px mono on a 360px screen was texture, not data. */
+const syncBusToggle = () => {
+  const btn = q('btn-bus-all');
+  const all = busEl.classList.contains('all');
+  const hidden = Math.max(0, busEl.children.length - 12);
+  btn.hidden = hidden === 0;
+  btn.textContent = all ? 'show less' : `show all (${busEl.children.length})`;
+  btn.setAttribute('aria-expanded', String(all));
+};
 const pushBus = (src, ev, msg, layer = 'kernel') => {
   const li = el('li');
   li.style.setProperty('--c', LAYERS[layer]?.color || 'var(--layer-kernel)');
   li.append(el('time', null, stamp()), el('b', null, src), el('em', null, ev), el('span', null, String(msg ?? '')));
   busEl.prepend(li);
   while (busEl.children.length > 60) busEl.lastElementChild.remove();
+  syncBusToggle();
   markUnread();
 };
 
@@ -300,34 +311,37 @@ const showTip = (ctx) => {
   }
 };
 
-/* ── HITL ─────────────────────────────────────────────────── */
+/* ── HITL ─────────────────────────────────────────────────────
+   A <dialog> rather than a bar at the bottom of a scrolling pane: the page
+   behind it is inert, so no other control can be reached while a decision is
+   open, and the buttons can never end up underneath the dock. Dismissing it
+   — Esc, or the backdrop — is a DENY. A security prompt defaults to no. */
 let pending = null;
 const hitl = q('hitl');
 const openHITL = (cap, args) => {
   pending = { cap, args: args || {} };
   q('hitl-cap').textContent = `${cap} ${JSON.stringify(args || {})}`;
   q('hitl-why').textContent = 'High-risk capabilities are never granted standing. Approving spends a single use — the next call asks again.';
-  hitl.classList.add('open');
-  if (view === 'mobile') {
-    setTab('run');
-    hitl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }
+  if (view === 'mobile') setTab('run');
+  hitl.showModal();
   q('hitl-approve').focus();
 };
-const closeHITL = () => { hitl.classList.remove('open'); const p = pending; pending = null; return p; };
+const takePending = () => { const p = pending; pending = null; return p; };
 
-q('hitl-approve').onclick = async () => {
-  const p = closeHITL();
+const decide = async (approve) => {
+  const p = takePending();
+  hitl.close();
   if (!p) return;
+  if (!approve) { await kernel.deny(p.cap, p.args); return; }
   kernel.approve(p.cap);
   pushBus('you', 'approve', p.cap, 'policy');
   await kernel.execute(p.cap, p.args);
 };
-q('hitl-deny').onclick = async () => {
-  const p = closeHITL();
-  if (!p) return;
-  await kernel.deny(p.cap, p.args);
-};
+
+q('hitl-approve').onclick = () => decide(true);
+q('hitl-deny').onclick = () => decide(false);
+// Esc and backdrop dismissal land here with `pending` still set — default deny.
+hitl.addEventListener('close', () => { if (pending) decide(false); });
 
 /* ── running ──────────────────────────────────────────────── */
 const recent = [];   // typed intents, newest first — not window.history
@@ -384,7 +398,8 @@ q('btn-copy').onclick = async () => {
   } catch { q('btn-copy').textContent = 'blocked'; }
 };
 q('btn-again').onclick = () => lastIntent && runIntent(lastIntent);
-q('btn-clear-bus').onclick = () => busEl.replaceChildren();
+q('btn-clear-bus').onclick = () => { busEl.replaceChildren(); busEl.classList.remove('all'); syncBusToggle(); };
+q('btn-bus-all').onclick = () => { busEl.classList.toggle('all'); syncBusToggle(); };
 q('btn-frame-close').onclick = () => frameSurface.clear();
 q('btn-reset').onclick = async () => {
   setBusy(true);
@@ -394,10 +409,12 @@ q('btn-reset').onclick = async () => {
   browser.reset();
   frameSurface.clear();
   busEl.replaceChildren();
+  busEl.classList.remove('all');
   q('out').classList.remove('show');
   q('welcome').classList.remove('hide');
   q('tip').hidden = true;
-  closeHITL();
+  pending = null;
+  hitl.close();
   resetPipeline();
   renderDisk();
   setBusy(false);
@@ -429,6 +446,19 @@ addEventListener('keydown', (e) => {
   }
 });
 
+/* The sticky footer sits --kb above the bottom edge. Without a keyboard the
+   inset is 0 and this is a no-op, which is also what desktop gets. */
+const vv = window.visualViewport;
+if (vv) {
+  const syncKeyboardInset = () => {
+    const inset = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop));
+    document.documentElement.style.setProperty('--kb', `${inset}px`);
+  };
+  vv.addEventListener('resize', syncKeyboardInset);
+  vv.addEventListener('scroll', syncKeyboardInset);
+  syncKeyboardInset();
+}
+
 /* A deep link from the explainer: reading a sample there and running it here
    are two deliberate acts, not one accidental one. */
 const runFromHash = () => {
@@ -453,6 +483,7 @@ fillCaps();
 fillMap();
 resetPipeline();
 renderDisk();
+syncBusToggle();
 runFromHash();
 pushBus('kernel', 'boot', saved?.length ? `Kernel live · disk restored (${saved.length})` : 'Kernel + FileAgent + BrowserAgent live', 'kernel');
 clearUnread();
