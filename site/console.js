@@ -6,7 +6,7 @@
    intent behaves, on top of the CSS that decides what is on screen. */
 
 import { Kernel, FileAgent, BrowserAgent, CAPABILITIES, LAYERS } from './kernel.js';
-import { GROUPS, SAMPLES, GRAMMAR, WALKTHROUGH, MAP } from './samples.js';
+import { PRIMARIES, MAP } from './content.js';
 import * as Disk from './disk.js';
 
 const q = (id) => document.getElementById(id);
@@ -90,67 +90,17 @@ tabbar.addEventListener('click', (e) => {
 });
 
 /* ── static renders ───────────────────────────────────────── */
-const fillSamples = () => {
-  const host = q('samples');
-  host.replaceChildren();
-  for (const g of GROUPS) {
-    const rows = SAMPLES.filter((s) => s.group === g.id);
-    if (!rows.length) continue;
-    const wrap = el('div', 'group');
-    const hd = el('div', 'group-hd');
-    hd.append(el('b', null, g.label), el('i', null, g.note));
-    const list = el('div', 'samples');
-    for (const s of rows) {
-      const b = el('button', 'sample');
-      b.type = 'button';
-      b.dataset.cmd = s.intent;
-      b.append(el('span', 's-cmd', s.intent), el('span', 's-does', s.does));
-      list.append(b);
-    }
-    wrap.append(hd, list);
-    host.append(wrap);
-  }
-};
-
-/* The phone gets one thumb-height row of the most useful intents,
-   always within reach — not a grid that vanishes after the first run. */
-const RAIL = ['list files', 'write a file', 'read /readme.md', 'navigate to example.com', 'read /does-not-exist.md'];
+/* One thumb-height row of the shortest path through the machine, always
+   within reach. Derived from the catalogue, so the two cannot drift. */
 const fillRail = () => {
   const rail = q('rail');
   rail.replaceChildren();
-  for (const intent of RAIL) {
-    const b = el('button', 'chip', intent);
+  for (const s of PRIMARIES) {
+    const b = el('button', 'chip', s.intent);
     b.type = 'button';
-    b.dataset.cmd = intent;
+    b.dataset.cmd = s.intent;
+    b.title = s.does;
     rail.append(b);
-  }
-};
-
-const fillWalkthrough = () => {
-  const host = q('walkthrough');
-  host.replaceChildren();
-  for (const s of WALKTHROUGH) {
-    const li = el('li');
-    const body = el('div');
-    body.append(el('b', null, s.title), el('p', null, s.watch));
-    if (s.intent) {
-      const b = el('button', 'run-step', `run: ${s.intent}`);
-      b.type = 'button';
-      b.dataset.cmd = s.intent;
-      body.append(b);
-    }
-    li.append(el('span', 'n', String(s.n)), body);
-    host.append(li);
-  }
-};
-
-const fillTable = (id, rows) => {
-  const body = q(id).querySelector('tbody');
-  body.replaceChildren();
-  for (const cells of rows) {
-    const tr = el('tr');
-    cells.forEach((c) => tr.append(el('td', null, c)));
-    body.append(tr);
   }
 };
 
@@ -200,7 +150,7 @@ const stamp = () => {
 };
 const pushBus = (src, ev, msg, layer = 'kernel') => {
   const li = el('li');
-  li.style.setProperty('--c', LAYERS[layer]?.color || 'var(--l-kernel)');
+  li.style.setProperty('--c', LAYERS[layer]?.color || 'var(--layer-kernel)');
   li.append(el('time', null, stamp()), el('b', null, src), el('em', null, ev), el('span', null, String(msg ?? '')));
   busEl.prepend(li);
   while (busEl.children.length > 60) busEl.lastElementChild.remove();
@@ -208,21 +158,15 @@ const pushBus = (src, ev, msg, layer = 'kernel') => {
 };
 
 /* ── pipeline strip ───────────────────────────────────────── */
-const PIPE = [
-  ['intent', 'intent', 'var(--l-intent)'],
-  ['plan', 'plan', 'var(--l-kernel)'],
-  ['broker', 'broker', 'var(--l-policy)'],
-  ['agent', 'agent', 'var(--l-agent)'],
-];
+const PIPE = ['intent', 'plan', 'broker', 'agent'];
 const resetPipeline = () => {
   const host = q('pipeline');
   host.replaceChildren();
-  PIPE.forEach(([key, label, color], i) => {
+  PIPE.forEach((key, i) => {
     if (i) host.append(el('span', 'arrow', '→'));
-    const s = el('span', 'stage', label);
+    const s = el('span', 'stage', key);
     s.id = `st-${key}`;
     s.dataset.on = 'false';
-    s.style.setProperty('--c', color);
     host.append(s);
   });
 };
@@ -305,7 +249,7 @@ kernel.bus.on('*', (e) => {
     case 'error':
       if (e.payload.code === 'HITL_REQUIRED') {
         pushBus('broker', 'HITL', e.payload.message, 'policy');
-        setStage('broker', 'awaiting you', 'fail');
+        setStage('broker', 'awaiting you', 'wait');
         openHITL(e.payload.capability, e.payload.args);
         showResult('waiting for you', `${e.payload.capability} is marked high risk, so the broker stopped here.\n\nApprove or deny below. Nothing runs until you decide.`, 'execution paused', 'wait');
         showTip({ hitl: true });
@@ -386,7 +330,7 @@ q('hitl-deny').onclick = async () => {
 };
 
 /* ── running ──────────────────────────────────────────────── */
-const history = [];
+const recent = [];   // typed intents, newest first — not window.history
 let histIndex = -1;
 let lastIntent = null;
 let running = false;
@@ -402,7 +346,7 @@ const setBusy = (on) => {
 const runIntent = async (text) => {
   if (running || !text) return;
   lastIntent = text;
-  if (history[0] !== text) history.unshift(text);
+  if (recent[0] !== text) recent.unshift(text);
   histIndex = -1;
   // On a phone the result is on another tab — go there, or the run looks like nothing happened.
   if (view === 'mobile') setTab('run');
@@ -443,10 +387,12 @@ q('btn-again').onclick = () => lastIntent && runIntent(lastIntent);
 q('btn-clear-bus').onclick = () => busEl.replaceChildren();
 q('btn-frame-close').onclick = () => frameSurface.clear();
 q('btn-reset').onclick = async () => {
+  setBusy(true);
   // reset() persists the seed through onChange, so clearing separately would
   // race it — whichever transaction landed last would win.
   await files.reset();
   browser.reset();
+  frameSurface.clear();
   busEl.replaceChildren();
   q('out').classList.remove('show');
   q('welcome').classList.remove('hide');
@@ -454,9 +400,9 @@ q('btn-reset').onclick = async () => {
   closeHITL();
   resetPipeline();
   renderDisk();
+  setBusy(false);
   pushBus('kernel', 'reset', 'disk and bus cleared', 'kernel');
 };
-q('btn-guide').onclick = () => q('samples').scrollIntoView({ block: 'start', behavior: 'smooth' });
 
 /* Desktop-only keyboard surface. A phone has no ⌘K and no room to advertise one. */
 addEventListener('keydown', (e) => {
@@ -471,17 +417,29 @@ addEventListener('keydown', (e) => {
   }
   if (!typing) return;
   if (e.key === 'Escape') { input.value = ''; histIndex = -1; return; }
-  if (e.key === 'ArrowUp' && history.length) {
+  if (e.key === 'ArrowUp' && recent.length) {
     e.preventDefault();
-    histIndex = Math.min(histIndex + 1, history.length - 1);
-    input.value = history[histIndex];
+    histIndex = Math.min(histIndex + 1, recent.length - 1);
+    input.value = recent[histIndex];
   }
   if (e.key === 'ArrowDown' && histIndex >= 0) {
     e.preventDefault();
     histIndex -= 1;
-    input.value = histIndex < 0 ? '' : history[histIndex];
+    input.value = histIndex < 0 ? '' : recent[histIndex];
   }
 });
+
+/* A deep link from the explainer: reading a sample there and running it here
+   are two deliberate acts, not one accidental one. */
+const runFromHash = () => {
+  const m = /^#run=(.+)$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  let intent;
+  try { intent = decodeURIComponent(m[1]); } catch { return; }
+  q('cmd-input').value = intent;
+  q('cmd-input').focus();
+};
 
 /* ── boot ─────────────────────────────────────────────────── */
 // Top-level await: the disk must be whole before anything renders it, or a
@@ -490,13 +448,11 @@ const saved = await Disk.load();
 if (saved?.length) files.load(saved);
 
 applyView();
-fillSamples();
 fillRail();
-fillWalkthrough();
-fillTable('grammar', GRAMMAR.map((g) => [g.match, g.cap, g.args]));
 fillCaps();
 fillMap();
 resetPipeline();
 renderDisk();
+runFromHash();
 pushBus('kernel', 'boot', saved?.length ? `Kernel live · disk restored (${saved.length})` : 'Kernel + FileAgent + BrowserAgent live', 'kernel');
 clearUnread();

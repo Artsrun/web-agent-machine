@@ -1,12 +1,14 @@
 /* Web Agent Machine — kernel.
    Pure logic: no DOM, no styling. The console imports this; so can a test. */
 
+/* Layer identity — which part of the machine spoke. Never a state: a green
+   here would mean "storage", not "it worked". The two scales stay disjoint. */
 export const LAYERS = {
-  intent: { label: 'Intent', color: 'var(--l-intent)' },
-  kernel: { label: 'Kernel', color: 'var(--l-kernel)' },
-  policy: { label: 'Broker', color: 'var(--l-policy)' },
-  agent: { label: 'Agents', color: 'var(--l-agent)' },
-  store: { label: 'Storage', color: 'var(--l-store)' },
+  intent: { label: 'Intent', color: 'var(--layer-intent)' },
+  kernel: { label: 'Kernel', color: 'var(--layer-kernel)' },
+  policy: { label: 'Broker', color: 'var(--layer-broker)' },
+  agent: { label: 'Agents', color: 'var(--layer-agent)' },
+  store: { label: 'Storage', color: 'var(--layer-store)' },
 };
 
 /* ── EventBus ─────────────────────────────────────────────── */

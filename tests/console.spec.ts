@@ -99,6 +99,7 @@ test.describe('Console — shared behaviour', () => {
 
     // reset is the only way out, and it is durable too
     await page.locator('#btn-reset').click();
+    await expect(page.locator('#bus li').first()).toContainText('reset');
     await page.reload();
     await expect(page.locator('#files')).not.toContainText('/persisted.md');
   });
@@ -125,18 +126,23 @@ test.describe('Console — shared behaviour', () => {
     await expect(page.locator('#disk-count')).toHaveText('(1)');
   });
 
-  test('samples and hints are always available, never only on the empty state', async ({ page }) => {
+  test('the sample rail outlives the first run', async ({ page }) => {
+    const chips = page.locator('#rail .chip');
+    const before = await chips.count();
+    expect(before).toBeGreaterThanOrEqual(3);
+
     await page.locator('#cmd-input').fill('list files');
     await page.locator('#cmd button').click();
     await expect(page.locator('#welcome')).toHaveClass(/hide/);
+    await expect(chips).toHaveCount(before);
+  });
 
-    // the catalogue outlives the first run
-    await expect(page.locator('#samples .sample').first()).toHaveAttribute('data-cmd', /.+/);
-    expect(await page.locator('#samples .sample').count()).toBeGreaterThanOrEqual(10);
-    expect(await page.locator('#grammar tbody tr').count()).toBeGreaterThanOrEqual(4);
-    // nothing on screen advertises a model tier — there is no model
-    await expect(page.locator('#samples')).not.toContainText('6b');
-    expect(await page.locator('#walkthrough li').count()).toBeGreaterThanOrEqual(5);
+  test('the console explains nothing — that is the explainer\'s job', async ({ page }) => {
+    // one surface, one job: no catalogue, no grammar table, no walkthrough
+    await expect(page.locator('#samples')).toHaveCount(0);
+    await expect(page.locator('#grammar')).toHaveCount(0);
+    await expect(page.locator('#walkthrough')).toHaveCount(0);
+    await expect(page.locator('a[href="./explain.html"]').first()).toBeVisible();
   });
 
   test('each result suggests a runnable next step', async ({ page }) => {
@@ -174,7 +180,6 @@ test.describe('Desktop view', () => {
 
   test('every pane is on screen at once; no tab bar', async ({ page }) => {
     await expect(page.locator('body')).toHaveAttribute('data-view', 'desktop');
-    await expect(page.locator('[data-pane="play"]')).toBeVisible();
     await expect(page.locator('[data-pane="run"]')).toBeVisible();
     await expect(page.locator('[data-pane="state"]')).toBeVisible();
     await expect(page.locator('[data-pane="bus"]')).toBeVisible();
@@ -233,10 +238,15 @@ test.describe('Mobile view', () => {
   });
 
   test('running from another tab jumps back to the result', async ({ page }) => {
-    await page.locator('#tabbar button[data-tab="play"]').click();
-    await page.locator('#samples .sample').first().click();
+    await page.locator('#tabbar button[data-tab="bus"]').click();
+    await page.locator('#rail .chip').first().click();
     await expect(page.locator('body')).toHaveAttribute('data-tab', 'run');
     await expect(page.locator('#out')).toHaveClass(/show/);
+  });
+
+  test('three tabs, not four — the guide is a page', async ({ page }) => {
+    await expect(page.locator('#tabbar button')).toHaveCount(3);
+    await expect(page.locator('#tabbar')).not.toContainText('Guide');
   });
 
   test('the bus tab flags unread activity', async ({ page }) => {
