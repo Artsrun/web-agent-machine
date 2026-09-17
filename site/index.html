@@ -62,10 +62,11 @@ body[data-tab="inspect"] .pane:not([data-pane="inspect"]) { display: none; }
 .panel { background: var(--substrate); border: 1px solid var(--etch); }
 
 /* ── topbar ──────────────────────────────────────────────── */
-.topbar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; flex-wrap: wrap; }
+.topbar { display: flex; align-items: center; gap: 8px 10px; padding: 9px 12px; flex-wrap: wrap; }
+.topbar .mark { flex: 1 1 auto; }
 .mark { font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; }
 .mark span { color: var(--accent); }
-.tools { display: flex; gap: 6px; margin-left: auto; }
+.tools { display: flex; gap: 6px; flex: 0 1 auto; }
 .tool {
   background: transparent; border: 1px solid var(--etch); color: var(--dim);
   font-family: var(--font-mono); font-size: 11px; padding: 6px 10px; cursor: pointer;
@@ -180,8 +181,6 @@ kbd {
 .map .node[data-live="true"] { background: #161C3D; border-color: var(--c); }
 .map .node b { display: block; font-size: 12px; font-weight: 600; }
 .map .node i { font-style: normal; font-family: var(--font-mono); font-size: 10px; color: var(--dimmer); }
-.map .node p { margin: 5px 0 0; font-size: 11.5px; color: var(--dim); line-height: 1.4; display: none; }
-.map .node[data-live="true"] p { display: block; }
 
 #bus { list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 11.5px; }
 #bus li { display: grid; gap: 2px 10px; padding: 6px 0; color: var(--dim); border-top: 1px solid var(--etch-soft); }
@@ -270,7 +269,6 @@ kbd {
   #cmd-input { font-size: 14px; }
   #out-body, .frame iframe { max-height: none; height: auto; }
   .frame iframe { height: 46dvh; }
-  .map .node:hover p { display: block; }
   #bus { font-size: 11.5px; }
   #bus li { grid-template-columns: auto 60px 84px 1fr; padding: 2px 0; border-top: 0; }
   #bus li span { grid-column: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -299,9 +297,8 @@ kbd {
       <div class="pipeline" id="pipeline" aria-label="Execution pipeline"></div>
 
       <div class="welcome" id="welcome">
-        <p><strong>Nothing has run yet.</strong> Pick one below, or type an intent of your own.</p>
-        <p>Low-risk tools run straight away. Anything the broker marks <span style="color:var(--stop)">high&nbsp;risk</span> stops and waits for you.</p>
-        <p style="font-size:12.5px"><a href="./explain.html">How it works &rarr;</a></p>
+        <p><strong>Nothing has run yet.</strong> Pick one below, or type your own —
+        the risky ones stop and ask. <a href="./explain.html">How it works &rarr;</a></p>
       </div>
 
       <div class="out" id="out">
@@ -325,7 +322,7 @@ kbd {
         <iframe id="frame" title="Sandboxed browser-agent frame"
                 sandbox="allow-scripts allow-same-origin"
                 referrerpolicy="no-referrer" loading="lazy"></iframe>
-        <p class="note">No cookies, no storage, no access to this page. A site may refuse to be framed — if it does, you are looking at its refusal.</p>
+        <p class="note">No cookies, no storage, no access to this page. A site may refuse to be framed.</p>
       </figure>
     </div>
   </section>
@@ -343,6 +340,7 @@ kbd {
     <div class="card">
       <h2 class="hd">Machine map <span class="muted">lights up live</span></h2>
       <div class="map" id="map"></div>
+      <p style="margin:8px 0 0;font-size:11.5px;color:var(--dimmer)">What each layer is for: <a href="./explain.html">how it works &rarr;</a></p>
     </div>
     <div class="card">
       <h2 class="hd">Event bus

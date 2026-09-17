@@ -35,9 +35,10 @@ terminal — nothing is retried and nothing is written in its place.
 - Machine map that lights up from real bus events
 - Notes + Playwright UI tests across both viewports
 
-What is claimed versus what is implemented is inventoried in
-[docs/product-refactor.md](docs/product-refactor.md), along with the plan to
-close the gap.
+Every claim on this page is meant to be checkable against the code. The audit
+that got it there — what used to be claimed, what was actually implemented, and
+the plan that closed the gap — is in
+[docs/product-refactor.md](docs/product-refactor.md).
 
 ## Layout
 

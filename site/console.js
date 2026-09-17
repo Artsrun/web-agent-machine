@@ -125,7 +125,7 @@ const fillMap = () => {
     node.id = `map-${n.id}`;
     node.dataset.live = 'false';
     node.style.setProperty('--c', LAYERS[n.layer].color);
-    node.append(el('b', null, n.title), el('i', null, n.sub), el('p', null, n.role));
+    node.append(el('b', null, n.title), el('i', null, n.sub));
     host.append(node);
   }
 };
@@ -188,8 +188,12 @@ const setStage = (key, label, state = 'true') => {
   if (label) s.textContent = label;
 };
 
-/* ── result panel ─────────────────────────────────────────── */
-const showResult = (label, body, meta = '', tone = 'ok') => {
+/* ── result panel ─────────────────────────────────────────────
+   The meta line used to read `${capability} · ok` directly under a badge
+   already reading the capability. It carries the plan now — the one thing
+   the result does not otherwise say. */
+let planLine = '';
+const showResult = (label, body, meta = planLine, tone = 'ok') => {
   q('welcome').classList.add('hide');
   q('out').classList.add('show');
   q('out-badge').dataset.tone = tone;
@@ -232,13 +236,14 @@ kernel.bus.on('*', (e) => {
       const desc = e.payload.steps.map((s) => s.description).join(' → ');
       pushBus('worker', 'plan', desc, 'kernel');
       setStage('plan', e.payload.steps.length > 1 ? `plan ×${e.payload.steps.length}` : 'plan');
+      planLine = desc;
       q('out-meta').textContent = desc;
       break;
     }
     case 'noop':
       pushBus('kernel', 'noop', 'no capability matched', 'kernel');
       setStage('broker', 'skipped', 'false');
-      showResult('no tool matched', `The planner found no capability for:\n\n  "${e.payload.text}"\n\nIt declines rather than inventing one. See "What the planner matches" in the guide.`, 'nothing executed', 'wait');
+      showResult('no tool matched', `No capability matches:\n\n  "${e.payload.text}"\n\nThe planner declines rather than inventing one.`, 'nothing executed', 'wait');
       showTip({ noop: true });
       break;
     case 'tool_call':
@@ -250,7 +255,7 @@ kernel.bus.on('*', (e) => {
         e.payload.ok ? JSON.stringify(e.payload.result).slice(0, 56) : e.payload.error, 'policy');
       if (e.payload.ok) {
         setStage('broker', 'granted');
-        showResult(e.payload.capability, e.payload.result, `${e.payload.capability} · ok`);
+        showResult(e.payload.capability, e.payload.result);
         renderDisk();
       } else {
         setStage('broker', 'denied', 'fail');
@@ -262,7 +267,7 @@ kernel.bus.on('*', (e) => {
         pushBus('broker', 'HITL', e.payload.message, 'policy');
         setStage('broker', 'awaiting you', 'wait');
         openHITL(e.payload.capability, e.payload.args);
-        showResult('waiting for you', `${e.payload.capability} is marked high risk, so the broker stopped here.\n\nApprove or deny below. Nothing runs until you decide.`, 'execution paused', 'wait');
+        showResult('waiting for you', `${e.payload.capability} is marked high risk, so the broker stopped here.`, 'execution paused', 'wait');
         showTip({ hitl: true });
       } else {
         pushBus('broker', 'error', e.payload.message || e.payload.code, 'policy');
@@ -277,7 +282,7 @@ kernel.bus.on('*', (e) => {
       pushBus('you', 'denied', e.payload.capability, 'policy');
       setStage('broker', 'you denied', 'fail');
       setStage('agent', 'not reached', 'false');
-      showResult('denied', `You refused ${e.payload.capability}.\n\nNothing ran, and nothing was written in its place. The refusal is on the bus.`, 'execution stopped', 'fail');
+      showResult('denied', `You refused ${e.payload.capability}. Nothing ran, and nothing was written in its place.`, 'execution stopped', 'fail');
       showTip({ denied: true });
       break;
   }

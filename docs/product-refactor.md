@@ -6,6 +6,20 @@ Two parts. **Part I** is an inventory of what the product claims versus what it
 does. **Part II** is the plan. Part I is the reason Part II is shaped the way it
 is, so it comes first.
 
+> **Status — Phases 0 through 4 are done.** Part I is kept in the past tense of
+> the repository as it stood at `3a73e23`; every gap it names has since been
+> closed or made true. Part II records what was decided and why. Phase 5 (the
+> kernel as a published, unit-tested artifact) is not started.
+>
+> Measured on the same page, running the same intent, before and after:
+>
+> | | informational elements | interactive elements |
+> |---|---|---|
+> | desktop, before | 202 | 26 |
+> | desktop, after | **70** | **11** |
+> | mobile, before | 33 (per tab, ×4 tabs) | 17 |
+> | mobile, after | **25** (per tab, ×2 tabs) | **13** |
+
 ---
 
 # Part I — What is fabricated
