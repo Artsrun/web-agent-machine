@@ -201,6 +201,8 @@ test.describe('Desktop view', () => {
   });
 
   test('keyboard: focus, history and approve', async ({ page }) => {
+    // the keyboard surface must be live as soon as the page is, not once
+    // IndexedDB has answered
     await page.keyboard.press('ControlOrMeta+k');
     await expect(page.locator('#cmd-input')).toBeFocused();
 

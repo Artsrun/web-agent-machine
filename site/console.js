@@ -476,19 +476,22 @@ const runFromHash = () => {
   q('cmd-input').focus();
 };
 
-/* ── boot ─────────────────────────────────────────────────── */
-// Top-level await: the disk must be whole before anything renders it, or a
-// reload flashes the seed and then corrects itself.
-const saved = await Disk.load();
-if (saved?.length) files.load(saved);
-
+/* ── boot ─────────────────────────────────────────────────────
+   Everything that does not need the disk runs first. `view` in particular:
+   it gates the whole desktop keyboard surface, so awaiting IndexedDB before
+   setting it left a window where the page looked ready and ⌘K did nothing. */
 applyView();
 fillRail();
 fillCaps();
 fillMap();
 resetPipeline();
+runFromHash();
+clearUnread();
+
+// Only the disk waits on the disk. Rendering it before it is whole would
+// flash the seed and then correct itself.
+const saved = await Disk.load();
+if (saved?.length) files.load(saved);
 renderDisk();
 syncBusToggle();
-runFromHash();
 pushBus('kernel', 'boot', saved?.length ? `Kernel live · disk restored (${saved.length})` : 'Kernel + FileAgent + BrowserAgent live', 'kernel');
-clearUnread();
