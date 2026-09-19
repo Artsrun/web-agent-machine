@@ -6,10 +6,9 @@ Two parts. **Part I** is an inventory of what the product claims versus what it
 does. **Part II** is the plan. Part I is the reason Part II is shaped the way it
 is, so it comes first.
 
-> **Status — Phases 0 through 4 are done.** Part I is kept in the past tense of
+> **Status — Phases 0 through 5 are done.** Part I is kept in the past tense of
 > the repository as it stood at `3a73e23`; every gap it names has since been
-> closed or made true. Part II records what was decided and why. Phase 5 (the
-> kernel as a published, unit-tested artifact) is not started.
+> closed or made true. Part II records what was decided and why.
 >
 > Measured on the same page, running the same intent, before and after:
 >
@@ -434,19 +433,47 @@ collapsed bus.** Everything else is an explainer, one link away.
 
 ---
 
-## Phase 5 — Make the kernel the durable artifact
+## Phase 5 — Make the kernel the durable artifact — **done**
 
-`kernel.js` is the only part of this repository with a life beyond the demo. It is
-DOM-free, event-driven, and already has a test seam.
+`kernel.js` is the only part of this repository with a life beyond the demo.
 
-- Port the TS kernel and protocol types stranded on `main`
-  (`docs/branch-review.md` flags them as worth taking) and settle the build-step
-  question this forces.
-- Unit-test the kernel directly, without Playwright. Broker semantics — one-shot
-  approval spent on use, unreachable-without-grant, risk escalation — deserve
-  tests that do not boot a browser.
-- Consider publishing it. A tiny, honest, well-tested capability broker with HITL
-  is a more defensible artifact than a console that explains one.
+**5.1 — The port was half of what the plan assumed.** `docs/branch-review.md`
+flagged `packages/kernel/src/*.ts` and `protocols/*.ts` on `main` as worth
+taking. The protocols are real: two files of pure type declarations, no
+dependencies. The kernel package is not — `index.ts` and `kernel.ts` import five
+modules (`event-bus`, `capability-broker`, `model-router`, `worker-bridge`,
+`sab-ring`) that were **never committed**, so it has never compiled, and
+`packages/agents/` is a `package.json` with no `src`. There was nothing to port.
+`branch-review.md` now says so.
+
+**5.2 — Types without a build step.** `protocols/*.ts` became
+`site/protocol.d.ts`: a typed statement *of* the shipped JavaScript rather than a
+source that compiles *into* it. `npm run typecheck` runs `tsc --noEmit` with
+`checkJs` over `kernel.js`, `disk.js` and `content.js`. No bundler, no `dist/`,
+nothing that can drift from what a browser is served. The port dropped every
+field nothing sets — `Grant.expires`, `Grant.constraints`, `CapabilityDef.scope`,
+`Intent.context`, the `state_update` event — because a type for a field no code
+writes is a claim like any other.
+
+**5.3 — The kernel is actually importable now.** Its own header said "no DOM …
+so can a test", and that was false: `WorkerBridge`'s constructor called
+`new Worker` unconditionally, so `import('./kernel.js')` threw
+`Worker is not defined` in Node. It degrades to the inline planner where there is
+no Worker. The typechecker then found the follow-on gap — `this.worker` was never
+assigned on that path — which is now an explicit `null` and a guard.
+
+**5.4 — 27 unit tests, no browser.** `tests/unit/kernel.test.js` runs on
+`node:test` with no new dependency. The rules the product is *about* had been
+asserted only through a UI test driving Chromium: one-shot approval spent on use,
+ungranted-is-terminal-and-never-prompts, a grant not serving another principal,
+a denial writing nothing in its place, the agent vetting a scheme before the
+surface is touched, and the planner declining rather than inventing.
+
+**5.5 — CI split.** One workflow, two jobs: `typecheck + kernel units` runs on
+every branch in seconds with no browser download and gates `browser tests`.
+
+Not done, and deliberately: publishing to npm. That is an outward, irreversible
+act and it is not mine to take. The package is ready for it.
 
 ---
 

@@ -13,13 +13,18 @@ const open = () => new Promise((resolve, reject) => {
   req.onerror = () => reject(req.error);
 });
 
+/**
+ * @param {IDBTransactionMode} mode
+ * @param {(store: IDBObjectStore) => IDBRequest | void} fn
+ * @returns {Promise<any>}
+ */
 const tx = async (mode, fn) => {
   const db = await open();
   try {
     return await new Promise((resolve, reject) => {
       const t = db.transaction(STORE, mode);
       const out = fn(t.objectStore(STORE));
-      t.oncomplete = () => resolve(out?.result);
+      t.oncomplete = () => resolve(out ? out.result : undefined);
       t.onerror = () => reject(t.error);
     });
   } finally { db.close(); }
@@ -27,11 +32,13 @@ const tx = async (mode, fn) => {
 
 /* Both sides swallow their own failures. Private mode, a blocked origin or a
    quota wall must degrade to "this session is ephemeral", never to a dead app. */
+/** @returns {Promise<[string, string][] | null>} */
 export const load = async () => {
   try { return (await tx('readonly', (s) => s.get('entries'))) || null; }
   catch { return null; }
 };
 
+/** @param {Map<string, string>} store */
 export const save = async (store) => {
   try { await tx('readwrite', (s) => s.put([...store], 'entries')); return true; }
   catch { return false; }

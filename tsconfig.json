@@ -1,0 +1,17 @@
+{
+  "//": "Typechecks the shipped JavaScript against site/protocol.d.ts. No emit, no build step, no dist — the files checked are the files served.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "skipLibCheck": true
+  },
+  "include": ["site/kernel.js", "site/disk.js", "site/content.js", "site/protocol.d.ts"]
+}
