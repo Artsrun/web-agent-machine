@@ -40,7 +40,8 @@ August. It carries four things `prod` has never had:
 | Path | Take it? |
 |---|---|
 | `site/index.html` (845-line machine map console) | **Idea only.** See below. |
-| `packages/kernel/src/*.ts`, `protocols/*.ts` | Worth taking, as a separate change. `prod` ships the same design as ES modules with no build step; the TS sources are the typed statement of the same protocol. Merging them means deciding whether this repo builds. That is a bigger decision than a UI pass. |
+| `protocols/*.ts` | **Taken** (2026-09-19). See below. |
+| `packages/kernel/src/*.ts` | **Skip — it does not compile.** See below. |
 | `docs/roadmap.md`, `docs/workers.md` | Worth taking as-is. No conflict with anything on `prod`. |
 | `apps/desktop/console.html` | Skip. Superseded by `site/index.html` on `prod`. |
 
@@ -62,6 +63,38 @@ that **lights up from real bus events**, not from `Math.random()`. Same explanat
 job, no simulator, and it costs about forty lines.
 
 `main`'s `SIM` console is therefore still worth reading, and still not worth merging.
+
+## Update, 2026-09-19 — what `packages/kernel` actually contains
+
+The table above used to say the TS kernel sources were "worth taking … the typed
+statement of the same protocol". Half of that was wrong, and it is worth writing
+down why, because the claim survived unchecked for a month.
+
+`packages/kernel/src/` holds exactly two files, `index.ts` and `kernel.ts`.
+Between them they import five modules that **were never committed**:
+
+```text
+capability-broker.ts   MISSING
+event-bus.ts           MISSING
+model-router.ts        MISSING
+worker-bridge.ts       MISSING
+sab-ring.ts            MISSING
+```
+
+So the package cannot compile, has never compiled, and is a skeleton rather than
+an implementation. `packages/agents/` is a `package.json` with no `src` at all.
+There is nothing there to port.
+
+`protocols/events.ts` and `protocols/capabilities.ts`, by contrast, are real and
+complete — two files of pure type declarations with no dependencies. Those have
+been taken, as `site/protocol.d.ts`, corrected to match what the kernel now
+actually emits and pruned of every field nothing sets. The repository still has
+no build step: the types are a `.d.ts` checked against the shipped JavaScript
+with `npm run typecheck`, so there is no `dist/` that can drift from the code
+served to a browser.
+
+Recommendation 3 above stands, minus the `packages/*` half: keep `main` as an
+archive. `docs/roadmap.md` and `docs/workers.md` are still worth cherry-picking.
 
 ## Recommendation
 

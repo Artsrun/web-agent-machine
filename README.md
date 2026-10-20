@@ -66,14 +66,22 @@ npm run serve     # http://localhost:4173
 
 ```bash
 npm install
+npm run typecheck         # tsc --noEmit over the shipped JS, no build step
+npm run test:unit         # node:test — kernel semantics, no browser needed
 npx playwright install chromium
-npm test                  # serves site/ and tests the working tree
-npm test -- --project=mobile
+npm run test:e2e          # serves site/ and drives it in two viewports
+npm test                  # all three, in that order
 npm run test:deployed     # smoke-test the live Pages build instead
 ```
 
-`npm test` boots `scripts/serve.mjs` and runs against it, so a pull request is
-tested against its own changes. Set `BASE_URL` to point the suite at a deployment.
+The kernel is DOM-free and imports in bare Node, so its rules — one-shot
+approval, ungranted-is-terminal, a denial that writes nothing in its place — are
+tested directly rather than through a browser. `npm run test:e2e` boots
+`scripts/serve.mjs`, so a pull request is tested against its own changes; set
+`BASE_URL` to point it at a deployment instead.
+
+`site/protocol.d.ts` types the JavaScript that actually ships. There is no build
+step and no `dist/`, so the types cannot drift from the served code.
 
 ## Branches
 

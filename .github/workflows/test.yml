@@ -1,27 +1,36 @@
-name: UI Tests
+name: Tests
 
 on:
   push:
-    branches: [prod]
+    branches: ['**']
   pull_request:
-    branches: [prod]
 
 jobs:
-  test:
+  # The kernel is DOM-free, so its types and semantics can be checked in
+  # seconds on every branch without downloading a browser.
+  check:
+    name: typecheck + kernel units
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:unit
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run tests
-        run: npm test
-
+  ui:
+    name: browser tests
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

@@ -8,6 +8,9 @@ const external = process.env.BASE_URL;
 
 export default defineConfig({
   testDir: './tests',
+  // Browser tests are *.spec.ts; tests/unit/*.test.js is node:test and
+  // would otherwise be claimed by Playwright's default testMatch.
+  testMatch: '**/*.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
